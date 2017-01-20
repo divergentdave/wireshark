@@ -48,7 +48,6 @@ static int hf_ge_srtp_todo = -1;
 static expert_field ei_ge_srtp_todo = EI_INIT;
 
 #define GE_SRTP_TCP_PORT 18245
-static guint tcp_port_pref = GE_SRTP_TCP_PORT;
 
 static gint ett_ge_srtp = -1;
 
@@ -70,7 +69,6 @@ dissect_ge_srtp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
 void
 proto_register_ge_srtp(void)
 {
-    module_t *ge_srtp_module;
     expert_module_t *expert_ge_srtp;
 
     static hf_register_info hf[] = {
@@ -100,12 +98,7 @@ proto_register_ge_srtp(void)
     expert_ge_srtp = expert_register_protocol(proto_ge_srtp);
     expert_register_field_array(expert_ge_srtp, ei, array_length(ei));
 
-    ge_srtp_module = prefs_register_protocol(proto_ge_srtp,
-            proto_reg_handoff_ge_srtp);
-
-    prefs_register_uint_preference(ge_srtp_module, "tcp.port1",
-            "GE SRTP TCP Port", "GE SRTP TCP Port if other than default",
-            10, &tcp_port_pref);
+    prefs_register_protocol(proto_ge_srtp, proto_reg_handoff_ge_srtp);
 }
 
 void
@@ -114,5 +107,5 @@ proto_reg_handoff_ge_srtp(void)
     dissector_handle_t ge_srtp_handle;
 
     ge_srtp_handle = create_dissector_handle(dissect_ge_srtp, proto_ge_srtp);
-    dissector_add_uint_with_preference("tcp.port2", GE_SRTP_TCP_PORT, ge_srtp_handle);
+    dissector_add_uint_with_preference("tcp.port", GE_SRTP_TCP_PORT, ge_srtp_handle);
 }
