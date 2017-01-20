@@ -75,7 +75,6 @@ dissect_ge_srtp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
         return 0;
 
     col_set_str(pinfo->cinfo, COL_PROTOCOL, "GE SRTP");
-    col_clear(pinfo->cinfo, COL_INFO);
 
     ti = proto_tree_add_item(tree, proto_ge_srtp, tvb, 0, -1, ENC_NA);
     ge_srtp_tree = proto_item_add_subtree(ti, ett_ge_srtp);
@@ -83,6 +82,9 @@ dissect_ge_srtp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
             tvb, 31, 1, ENC_BIG_ENDIAN);
 
     guint8 mbox_type = tvb_get_guint8(tvb, 31);
+    col_clear(pinfo->cinfo, COL_INFO);
+    col_add_fstr(pinfo->cinfo, COL_INFO, "%s",
+            val_to_str(mbox_type, ge_srtp_mbox_type, "Unknown (0x%02x)"));
     if (mbox_type == 0x80 || mbox_type == 0x94 || mbox_type == 0xC0 ||
             mbox_type == 0xD1 || mbox_type == 0xD4) {
         proto_item_append_text(mbox_type_ti, ": %s",
