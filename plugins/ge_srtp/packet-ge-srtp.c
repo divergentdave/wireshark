@@ -44,25 +44,51 @@ void proto_register_ge_srtp(void);
 void proto_reg_handoff_ge_srtp(void);
 
 static int proto_ge_srtp = -1;
-static int hf_ge_srtp_todo = -1;
+static int hf_ge_srtp_mbox_type = -1;
 static expert_field ei_ge_srtp_todo = EI_INIT;
 
 #define GE_SRTP_TCP_PORT 18245
 
 static gint ett_ge_srtp = -1;
 
+static const value_string ge_srtp_mbox_type[] = {
+    { 0x80, "Initial Request with Text Buffer" },
+    { 0x94, "Completion ACK with Text Buffer" },
+    { 0xC0, "Initial Request" },
+    { 0xD1, "Erorr NACK" },
+    { 0xD4, "Completion ACK" },
+    { 0, NULL }
+};
+
+/* Packet length must be at least 32 for there to be a valid mailbox message */
+#define GE_SRTP_MIN_LENGTH 32
+
 static int
 dissect_ge_srtp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
         void *data _U_)
 {
-    proto_item *ti, *expert_ti;
+    proto_item *ti;
+    proto_item *mbox_type_ti;
     proto_tree *ge_srtp_tree;
 
+    if (tvb_reported_length(tvb) < GE_SRTP_MIN_LENGTH)
+        return 0;
+
     col_set_str(pinfo->cinfo, COL_PROTOCOL, "GE SRTP");
+    col_clear(pinfo->cinfo, COL_INFO);
+
     ti = proto_tree_add_item(tree, proto_ge_srtp, tvb, 0, -1, ENC_NA);
     ge_srtp_tree = proto_item_add_subtree(ti, ett_ge_srtp);
-    expert_ti = proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_todo, tvb, 0, 0, ENC_NA);
-    expert_add_info(pinfo, expert_ti, &ei_ge_srtp_todo);
+    mbox_type_ti = proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_type,
+            tvb, 31, 1, ENC_BIG_ENDIAN);
+
+    guint8 mbox_type = tvb_get_guint8(tvb, 31);
+    if (mbox_type == 0x80 || mbox_type == 0x94 || mbox_type == 0xC0 ||
+            mbox_type == 0xD1 || mbox_type == 0xD4) {
+        proto_item_append_text(mbox_type_ti, ": %s",
+                val_to_str(mbox_type, ge_srtp_mbox_type, "N/A"));
+    }
+
     return tvb_captured_length(tvb);
 }
 
@@ -72,10 +98,11 @@ proto_register_ge_srtp(void)
     expert_module_t *expert_ge_srtp;
 
     static hf_register_info hf[] = {
-        { &hf_ge_srtp_todo,
-          { "FIELDNAME", "ge_srtp.FIELDABBREV",
-            FT_BOOLEAN, BASE_NONE, NULL, 0,
-            "FIELDDESCR", HFILL }
+        { &hf_ge_srtp_mbox_type,
+          { "GE SRTP Mailbox Type", "ge_srtp.mbox_type",
+            FT_UINT8, BASE_HEX,
+            NULL, 0,
+            NULL, HFILL }
         }
     };
 
