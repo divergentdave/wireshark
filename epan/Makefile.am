@@ -490,6 +490,7 @@ plugin_src = \
 	../plugins/docsis/packet-uccreq.c \
 	../plugins/docsis/packet-uccrsp.c \
 	../plugins/docsis/packet-ucd.c \
+	../plugins/ge_srtp/packet-ge-srtp.c \
 	../plugins/gryphon/packet-gryphon.c \
 	../plugins/irda/packet-irda.c \
 	../plugins/m2m/packet-m2m.c \
