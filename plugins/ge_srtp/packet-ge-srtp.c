@@ -45,7 +45,7 @@ void proto_reg_handoff_ge_srtp(void);
 
 static int proto_ge_srtp = -1;
 static int hf_ge_srtp_mbox_type = -1;
-static expert_field ei_ge_srtp_todo = EI_INIT;
+static expert_field ei_ge_srtp_mbox_type_unknown = EI_INIT;
 
 #define GE_SRTP_TCP_PORT 18245
 
@@ -87,6 +87,8 @@ dissect_ge_srtp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
             mbox_type == 0xD1 || mbox_type == 0xD4) {
         proto_item_append_text(mbox_type_ti, ": %s",
                 val_to_str(mbox_type, ge_srtp_mbox_type, "N/A"));
+    } else {
+        expert_add_info(pinfo, mbox_type_ti, &ei_ge_srtp_mbox_type_unknown);
     }
 
     return tvb_captured_length(tvb);
@@ -102,7 +104,7 @@ proto_register_ge_srtp(void)
           { "GE SRTP Mailbox Type", "ge_srtp.mbox_type",
             FT_UINT8, BASE_HEX,
             NULL, 0,
-            NULL, HFILL }
+            "Mailbox message type code", HFILL }
         }
     };
 
@@ -111,9 +113,9 @@ proto_register_ge_srtp(void)
     };
 
     static ei_register_info ei[] = {
-        { &ei_ge_srtp_todo,
-          { "ge_srtp.EXPERTABBREV", PI_MALFORMED, PI_ERROR,
-            "EXPERTDESCR", EXPFILL }
+        { &ei_ge_srtp_mbox_type_unknown,
+          { "ge_srtp.mbox_type_unknown", PI_UNDECODED, PI_WARN,
+            "Mailbox message type code was not recognized", EXPFILL }
         }
     };
 
