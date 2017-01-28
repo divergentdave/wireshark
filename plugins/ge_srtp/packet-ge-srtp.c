@@ -44,9 +44,13 @@ void proto_register_ge_srtp(void);
 void proto_reg_handoff_ge_srtp(void);
 
 static int proto_ge_srtp = -1;
+
 static int hf_ge_srtp_mbox_todo_1 = -1;
-static int hf_ge_srtp_mbox_reserved_1 = -1;
-static int hf_ge_srtp_mbox_timestamp = -1;
+static int hf_ge_srtp_mbox_todo_2 = -1;
+
+/* Mailbox messages */
+static int hf_ge_srtp_mbox_reserved_1 = -1; // TODO: what's the best practices on reserved fields?
+static int hf_ge_srtp_mbox_timestamp = -1; // TODO: BCD decode time
 static int hf_ge_srtp_mbox_reserved_2 = -1;
 static int hf_ge_srtp_mbox_seq_num = -1;
 static int hf_ge_srtp_mbox_type = -1;
@@ -54,7 +58,35 @@ static int hf_ge_srtp_mbox_src_id = -1;
 static int hf_ge_srtp_mbox_dst_id = -1;
 static int hf_ge_srtp_mbox_packet_num = -1;
 static int hf_ge_srtp_mbox_total_packets = -1;
-static int hf_ge_srtp_mbox_todo_2 = -1;
+
+/* Initial request/Initial request with text buffer */
+static int hf_ge_srtp_mbox_svc_req_code = -1;
+static int hf_ge_srtp_mbox_svc_req_data = -1;
+
+static int hf_ge_srtp_mbox_svc_req_data_len = -1;
+static int hf_ge_srtp_mbox_svc_req_reserved = -1;
+static int hf_ge_srtp_mbox_packet_num_2 = -1; // TODO: coalescse these into one field, read it from different places
+static int hf_ge_srtp_mbox_total_packets_2 = -1;
+
+/* Completion ACK/Completion ACK with text buffer */
+static int hf_ge_srtp_mbox_status_code = -1;
+static int hf_ge_srtp_mbox_status_data = -1;
+static int hf_ge_srtp_mbox_response_data = -1;
+static int hf_ge_srtp_mbox_control_program_num = -1; // TODO: subtree for piggyback
+static int hf_ge_srtp_mbox_privilege_level = -1;
+static int hf_ge_srtp_mbox_last_sweep = -1;
+static int hf_ge_srtp_mbox_plc_status_word = -1; // TODO: bitfield
+
+static int hf_ge_srtp_mbox_response_data_len = -1;
+static int hf_ge_srtp_mbox_ack_reserved = -1;
+static int hf_ge_srtp_mbox_packet_num_3 = -1;
+static int hf_ge_srtp_mbox_total_packets_3 = -1;
+
+/* Error NACK */
+static int hf_ge_srtp_mbox_major_error_status = -1;
+static int hf_ge_srtp_mbox_minor_error_status = -1;
+static int hf_ge_srtp_mbox_nack_reserved = -1;
+
 static expert_field ei_ge_srtp_mbox_type_unknown = EI_INIT;
 
 #define GE_SRTP_TCP_PORT 18245
@@ -91,38 +123,107 @@ dissect_ge_srtp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
     ge_srtp_tree = proto_item_add_subtree(ti, ett_ge_srtp);
     proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_todo_1,
             tvb, 0, 24, ENC_NA);
-    proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_reserved_1,
-            tvb, 24, 2, ENC_BIG_ENDIAN);
-    proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_timestamp,
-            tvb, 26, 3, ENC_BIG_ENDIAN);
-    proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_reserved_2,
-            tvb, 29, 1, ENC_BIG_ENDIAN);
-    proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_seq_num,
-            tvb, 30, 1, ENC_BIG_ENDIAN);
-    mbox_type_ti = proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_type,
-            tvb, 31, 1, ENC_BIG_ENDIAN);
-    proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_src_id,
-            tvb, 32, 4, ENC_BIG_ENDIAN);
-    proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_dst_id,
-            tvb, 36, 4, ENC_BIG_ENDIAN);
-    proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_packet_num,
-            tvb, 40, 1, ENC_BIG_ENDIAN);
-    proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_total_packets,
-            tvb, 41, 1, ENC_BIG_ENDIAN);
     todo_2_remaining = tvb_captured_length_remaining(tvb, 56);
     if (todo_2_remaining > 0) {
         proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_todo_2,
                 tvb, 56, todo_2_remaining, ENC_NA);
     }
 
+    proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_reserved_1,
+            tvb, 24, 2, ENC_LITTLE_ENDIAN);
+    proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_timestamp,
+            tvb, 26, 3, ENC_LITTLE_ENDIAN);
+    proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_reserved_2,
+            tvb, 29, 1, ENC_LITTLE_ENDIAN);
+    proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_seq_num,
+            tvb, 30, 1, ENC_LITTLE_ENDIAN);
+    mbox_type_ti = proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_type,
+            tvb, 31, 1, ENC_LITTLE_ENDIAN);
+    proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_src_id,
+            tvb, 32, 4, ENC_LITTLE_ENDIAN);
+    proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_dst_id,
+            tvb, 36, 4, ENC_LITTLE_ENDIAN);
+    proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_packet_num,
+            tvb, 40, 1, ENC_LITTLE_ENDIAN);
+    proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_total_packets,
+            tvb, 41, 1, ENC_LITTLE_ENDIAN);
+
     guint8 mbox_type = tvb_get_guint8(tvb, 31);
     col_clear(pinfo->cinfo, COL_INFO);
     col_add_fstr(pinfo->cinfo, COL_INFO, "%s",
             val_to_str(mbox_type, ge_srtp_mbox_type, "Unknown (0x%02x)"));
-    if (mbox_type == 0x80 || mbox_type == 0x94 || mbox_type == 0xC0 ||
-            mbox_type == 0xD1 || mbox_type == 0xD4) {
+    if (mbox_type == 0x80) {
         proto_item_append_text(mbox_type_ti, ": %s",
                 val_to_str(mbox_type, ge_srtp_mbox_type, "N/A"));
+
+        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_svc_req_code,
+                tvb, 42, 1, ENC_LITTLE_ENDIAN);
+        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_svc_req_data_len,
+                tvb, 43, 4, ENC_LITTLE_ENDIAN);
+        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_svc_req_reserved,
+                tvb, 47, 1, ENC_LITTLE_ENDIAN);
+        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_packet_num_2,
+                tvb, 48, 1, ENC_LITTLE_ENDIAN);
+        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_total_packets_2,
+                tvb, 49, 1, ENC_LITTLE_ENDIAN);
+        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_svc_req_data,
+                tvb, 51, 5, ENC_LITTLE_ENDIAN);
+    } else if (mbox_type == 0x94) {
+        proto_item_append_text(mbox_type_ti, ": %s",
+                val_to_str(mbox_type, ge_srtp_mbox_type, "N/A"));
+
+        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_response_data_len,
+                tvb, 42, 2, ENC_LITTLE_ENDIAN);
+        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_ack_reserved,
+                tvb, 44, 4, ENC_LITTLE_ENDIAN);
+        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_packet_num_3,
+                tvb, 48, 1, ENC_LITTLE_ENDIAN);
+        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_total_packets_3,
+                tvb, 49, 1, ENC_LITTLE_ENDIAN);
+        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_control_program_num,
+                tvb, 50, 1, ENC_LITTLE_ENDIAN);
+        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_privilege_level,
+                tvb, 51, 1, ENC_LITTLE_ENDIAN);
+        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_last_sweep,
+                tvb, 52, 2, ENC_LITTLE_ENDIAN);
+        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_plc_status_word,
+                tvb, 54, 2, ENC_LITTLE_ENDIAN);
+    } else if (mbox_type == 0xC0) {
+        proto_item_append_text(mbox_type_ti, ": %s",
+                val_to_str(mbox_type, ge_srtp_mbox_type, "N/A"));
+
+        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_svc_req_code,
+                tvb, 42, 1, ENC_LITTLE_ENDIAN);
+        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_svc_req_data,
+                tvb, 43, 13, ENC_LITTLE_ENDIAN);
+    } else if (mbox_type == 0xD1) {
+        proto_item_append_text(mbox_type_ti, ": %s",
+                val_to_str(mbox_type, ge_srtp_mbox_type, "N/A"));
+
+        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_major_error_status,
+                tvb, 42, 1, ENC_LITTLE_ENDIAN);
+        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_minor_error_status,
+                tvb, 43, 1, ENC_LITTLE_ENDIAN);
+        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_nack_reserved,
+                tvb, 44, 12, ENC_LITTLE_ENDIAN);
+    } else if (mbox_type == 0xD4) {
+        proto_item_append_text(mbox_type_ti, ": %s",
+                    val_to_str(mbox_type, ge_srtp_mbox_type, "N/A"));
+
+        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_status_code,
+                tvb, 42, 1, ENC_LITTLE_ENDIAN);
+        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_status_data,
+                tvb, 43, 1, ENC_LITTLE_ENDIAN);
+        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_response_data,
+                tvb, 44, 6, ENC_LITTLE_ENDIAN);
+        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_control_program_num,
+                tvb, 50, 1, ENC_LITTLE_ENDIAN);
+        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_privilege_level,
+                tvb, 51, 1, ENC_LITTLE_ENDIAN);
+        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_last_sweep,
+                tvb, 52, 2, ENC_LITTLE_ENDIAN);
+        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_plc_status_word,
+                tvb, 54, 2, ENC_LITTLE_ENDIAN);
     } else {
         expert_add_info(pinfo, mbox_type_ti, &ei_ge_srtp_mbox_type_unknown);
     }
@@ -201,6 +302,126 @@ proto_register_ge_srtp(void)
             FT_NONE, BASE_NONE,
             NULL, 0,
             "TODO", HFILL }
+        },
+        { &hf_ge_srtp_mbox_svc_req_code,
+          { "Service request code", "ge_srtp.svc_req_code",
+            FT_UINT8, BASE_HEX,
+            NULL, 0,
+            "Service request code", HFILL }
+        },
+        { &hf_ge_srtp_mbox_svc_req_data,
+          { "Service request data", "ge_srtp.svc_req_data",
+            FT_BYTES, SEP_SPACE,
+            NULL, 0,
+            "Service request data", HFILL }
+        },
+        { &hf_ge_srtp_mbox_svc_req_data_len,
+          { "Service request data length", "ge_srtp.svc_req_data_len",
+            FT_UINT16, BASE_DEC,
+            NULL, 0,
+            "Service request data length", HFILL }
+        },
+        { &hf_ge_srtp_mbox_svc_req_reserved,
+          { "Reserved", "ge_srtp.svc_req_reserved",
+            FT_NONE, BASE_NONE,
+            NULL, 0,
+            "Reserved", HFILL }
+        },
+        { &hf_ge_srtp_mbox_packet_num_2,
+          { "Packet number", "ge_srtp.packet_num_2",
+            FT_UINT8, BASE_DEC,
+            NULL, 0,
+            "Packet number", HFILL }
+        },
+        { &hf_ge_srtp_mbox_total_packets_2,
+          { "Total packets", "ge_srtp.total_packets_2",
+            FT_UINT8, BASE_DEC,
+            NULL, 0,
+            "Total packets", HFILL }
+        },
+        { &hf_ge_srtp_mbox_status_code,
+          { "Status code", "ge_srtp.status_code",
+            FT_UINT8, BASE_HEX,
+            NULL, 0,
+            "Status code", HFILL }
+        },
+        { &hf_ge_srtp_mbox_status_data,
+          { "Status data", "ge_srtp.status_data",
+            FT_BYTES, SEP_SPACE,
+            NULL, 0,
+            "Status data", HFILL }
+        },
+        { &hf_ge_srtp_mbox_response_data,
+          { "Response data", "ge_srtp.response_data",
+            FT_BYTES, SEP_SPACE,
+            NULL, 0,
+            "Response data", HFILL }
+        },
+        { &hf_ge_srtp_mbox_control_program_num,
+          { "Control program number", "ge_srtp.control_program_num",
+            FT_UINT8, BASE_DEC,
+            NULL, 0,
+            "Control program number", HFILL }
+        },
+        { &hf_ge_srtp_mbox_privilege_level,
+          { "Privilege level", "ge_srtp.privilege_level",
+            FT_UINT8, BASE_DEC,
+            NULL, 0,
+            "Privilege level", HFILL }
+        },
+        { &hf_ge_srtp_mbox_last_sweep,
+          { "Last sweep time", "ge_srtp.last_sweep",
+            FT_UINT16, BASE_DEC,
+            NULL, 0,
+            "Last sweep time (ms)", HFILL }
+        },
+        { &hf_ge_srtp_mbox_plc_status_word,
+          { "PLC status word", "ge_srtp.plc_status_word",
+            FT_UINT16, BASE_HEX,
+            NULL, 0,
+            "PLC status word", HFILL }
+        },
+        { &hf_ge_srtp_mbox_response_data_len,
+          { "Response data length", "ge_srtp.response_data_len",
+            FT_UINT16, BASE_DEC,
+            NULL, 0,
+            "Response data length", HFILL }
+        },
+        { &hf_ge_srtp_mbox_ack_reserved,
+          { "Reserved", "ge_srtp.ack_reserved",
+            FT_NONE, BASE_NONE,
+            NULL, 0,
+            "Reserved", HFILL }
+        },
+        { &hf_ge_srtp_mbox_packet_num_3,
+          { "Packet number", "ge_srtp.packet_num_3",
+            FT_UINT8, BASE_DEC,
+            NULL, 0,
+            "Packet number", HFILL }
+        },
+        { &hf_ge_srtp_mbox_total_packets_3,
+          { "Total packets", "ge_srtp.total_packets_3",
+            FT_UINT8, BASE_DEC,
+            NULL, 0,
+            "Total packets", HFILL }
+        },
+        { &hf_ge_srtp_mbox_major_error_status,
+          { "Major error status", "ge_srtp.major_error_status",
+            FT_UINT8, BASE_HEX,
+            NULL, 0,
+            "Major error status", HFILL }
+        },
+        { &hf_ge_srtp_mbox_minor_error_status,
+          { "Minor error status", "ge_srtp.minor_error_status",
+            FT_UINT8, BASE_HEX,
+            NULL, 0,
+            "Minor error status", HFILL }
+        },
+        { &hf_ge_srtp_mbox_nack_reserved,
+          { "Reserved", "ge_srtp.nack_reserved",
+            FT_NONE, BASE_NONE,
+            NULL, 0,
+            "Reserved", HFILL }
         }
     };
 
