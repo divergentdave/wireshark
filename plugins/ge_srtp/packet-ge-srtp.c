@@ -44,7 +44,15 @@ void proto_register_ge_srtp(void);
 void proto_reg_handoff_ge_srtp(void);
 
 static int proto_ge_srtp = -1;
+static int hf_ge_srtp_mbox_reserved_1 = -1;
+static int hf_ge_srtp_mbox_timestamp = -1;
+static int hf_ge_srtp_mbox_reserved_2 = -1;
+static int hf_ge_srtp_mbox_seq_num = -1;
 static int hf_ge_srtp_mbox_type = -1;
+static int hf_ge_srtp_mbox_src_id = -1;
+static int hf_ge_srtp_mbox_dst_id = -1;
+static int hf_ge_srtp_mbox_packet_num = -1;
+static int hf_ge_srtp_mbox_total_packets = -1;
 static expert_field ei_ge_srtp_mbox_type_unknown = EI_INIT;
 
 #define GE_SRTP_TCP_PORT 18245
@@ -78,8 +86,24 @@ dissect_ge_srtp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
 
     ti = proto_tree_add_item(tree, proto_ge_srtp, tvb, 0, -1, ENC_NA);
     ge_srtp_tree = proto_item_add_subtree(ti, ett_ge_srtp);
+    proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_reserved_1,
+            tvb, 24, 2, ENC_BIG_ENDIAN);
+    proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_timestamp,
+            tvb, 26, 3, ENC_BIG_ENDIAN);
+    proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_reserved_2,
+            tvb, 29, 1, ENC_BIG_ENDIAN);
+    proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_seq_num,
+            tvb, 30, 1, ENC_BIG_ENDIAN);
     mbox_type_ti = proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_type,
             tvb, 31, 1, ENC_BIG_ENDIAN);
+    proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_src_id,
+            tvb, 32, 4, ENC_BIG_ENDIAN);
+    proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_dst_id,
+            tvb, 36, 4, ENC_BIG_ENDIAN);
+    proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_packet_num,
+            tvb, 40, 1, ENC_BIG_ENDIAN);
+    proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_total_packets,
+            tvb, 41, 1, ENC_BIG_ENDIAN);
 
     guint8 mbox_type = tvb_get_guint8(tvb, 31);
     col_clear(pinfo->cinfo, COL_INFO);
@@ -102,11 +126,59 @@ proto_register_ge_srtp(void)
     expert_module_t *expert_ge_srtp;
 
     static hf_register_info hf[] = {
+        { &hf_ge_srtp_mbox_reserved_1,
+          { "Reserved (0)", "ge_srtp.reserved_2",
+            FT_UINT16, BASE_HEX,
+            NULL, 0,
+            "Reserved field, must be zero", HFILL }
+        },
+        { &hf_ge_srtp_mbox_timestamp,
+          { "Timestamp", "ge_srtp.timestamp",
+            FT_UINT24, BASE_HEX,
+            NULL, 0,
+            "Timestamp (optional)", HFILL }
+        },
+        { &hf_ge_srtp_mbox_reserved_2,
+          { "Reserved (0)", "ge_srtp.reserved_2",
+            FT_UINT8, BASE_HEX,
+            NULL, 0,
+            "Reserved field, must be zero", HFILL }
+        },
+        { &hf_ge_srtp_mbox_seq_num,
+          { "Sequence Number", "ge_srtp.mbox_seq_num",
+            FT_UINT8, BASE_DEC,
+            NULL, 0,
+            "Mailbox message sequence number", HFILL }
+        },
         { &hf_ge_srtp_mbox_type,
-          { "GE SRTP Mailbox Type", "ge_srtp.mbox_type",
+          { "Mailbox Type", "ge_srtp.mbox_type",
             FT_UINT8, BASE_HEX,
             NULL, 0,
             "Mailbox message type code", HFILL }
+        },
+        { &hf_ge_srtp_mbox_src_id,
+          { "Mailbox Source ID", "ge_srtp.mbox_src_id",
+            FT_UINT32, BASE_HEX,
+            NULL, 0,
+            "Mailbox source ID", HFILL }
+        },
+        { &hf_ge_srtp_mbox_dst_id,
+          { "Mailbox Destination ID", "ge_srtp.mbox_dst_id",
+            FT_UINT32, BASE_HEX,
+            NULL, 0,
+            "Mailbox destination ID", HFILL }
+        },
+        { &hf_ge_srtp_mbox_packet_num,
+          { "Packet number", "ge_srtp.packet_num",
+            FT_UINT8, BASE_DEC,
+            NULL, 0,
+            "Packet number", HFILL }
+        },
+        { &hf_ge_srtp_mbox_total_packets,
+          { "Total packets", "ge_srtp.total_packets",
+            FT_UINT8, BASE_DEC,
+            NULL, 0,
+            "Total packets", HFILL }
         }
     };
 
