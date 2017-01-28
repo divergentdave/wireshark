@@ -178,8 +178,16 @@ dissect_ge_srtp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
 
     guint8 mbox_type = tvb_get_guint8(tvb, 31);
     col_clear(pinfo->cinfo, COL_INFO);
-    col_add_fstr(pinfo->cinfo, COL_INFO, "%s",
-            val_to_str(mbox_type, ge_srtp_mbox_type, "Unknown (0x%02x)"));
+    if (mbox_type == 0xC0 || mbox_type == 0x80) {
+        guint8 svc_req_code = tvb_get_guint8(tvb, 42);
+        col_add_fstr(pinfo->cinfo, COL_INFO, "%s (%s)",
+                val_to_str(mbox_type, ge_srtp_mbox_type, "unused"),
+                val_to_str(svc_req_code, ge_srtp_svc_req_type,
+                    "Service request 0x%02x"));
+    } else {
+        col_add_fstr(pinfo->cinfo, COL_INFO, "%s",
+                val_to_str(mbox_type, ge_srtp_mbox_type, "Unknown (0x%02x)"));
+    }
     if (mbox_type == 0x80) {
         proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_svc_req_code,
                 tvb, 42, 1, ENC_LITTLE_ENDIAN);
