@@ -44,6 +44,7 @@ void proto_register_ge_srtp(void);
 void proto_reg_handoff_ge_srtp(void);
 
 static int proto_ge_srtp = -1;
+static int hf_ge_srtp_mbox_todo_1 = -1;
 static int hf_ge_srtp_mbox_reserved_1 = -1;
 static int hf_ge_srtp_mbox_timestamp = -1;
 static int hf_ge_srtp_mbox_reserved_2 = -1;
@@ -53,6 +54,7 @@ static int hf_ge_srtp_mbox_src_id = -1;
 static int hf_ge_srtp_mbox_dst_id = -1;
 static int hf_ge_srtp_mbox_packet_num = -1;
 static int hf_ge_srtp_mbox_total_packets = -1;
+static int hf_ge_srtp_mbox_todo_2 = -1;
 static expert_field ei_ge_srtp_mbox_type_unknown = EI_INIT;
 
 #define GE_SRTP_TCP_PORT 18245
@@ -78,6 +80,7 @@ dissect_ge_srtp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
     proto_item *ti;
     proto_item *mbox_type_ti;
     proto_tree *ge_srtp_tree;
+    gint todo_2_remaining;
 
     if (tvb_reported_length(tvb) < GE_SRTP_MIN_LENGTH)
         return 0;
@@ -86,6 +89,8 @@ dissect_ge_srtp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
 
     ti = proto_tree_add_item(tree, proto_ge_srtp, tvb, 0, -1, ENC_NA);
     ge_srtp_tree = proto_item_add_subtree(ti, ett_ge_srtp);
+    proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_todo_1,
+            tvb, 0, 24, ENC_NA);
     proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_reserved_1,
             tvb, 24, 2, ENC_BIG_ENDIAN);
     proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_timestamp,
@@ -104,6 +109,11 @@ dissect_ge_srtp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
             tvb, 40, 1, ENC_BIG_ENDIAN);
     proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_total_packets,
             tvb, 41, 1, ENC_BIG_ENDIAN);
+    todo_2_remaining = tvb_captured_length_remaining(tvb, 56);
+    if (todo_2_remaining > 0) {
+        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_todo_2,
+                tvb, 56, todo_2_remaining, ENC_NA);
+    }
 
     guint8 mbox_type = tvb_get_guint8(tvb, 31);
     col_clear(pinfo->cinfo, COL_INFO);
@@ -126,6 +136,12 @@ proto_register_ge_srtp(void)
     expert_module_t *expert_ge_srtp;
 
     static hf_register_info hf[] = {
+        { &hf_ge_srtp_mbox_todo_1,
+          { "TODO", "ge_srtp.todo_1",
+            FT_NONE, BASE_NONE,
+            NULL, 0,
+            "TODO", HFILL }
+        },
         { &hf_ge_srtp_mbox_reserved_1,
           { "Reserved (0)", "ge_srtp.reserved_2",
             FT_UINT16, BASE_HEX,
@@ -179,6 +195,12 @@ proto_register_ge_srtp(void)
             FT_UINT8, BASE_DEC,
             NULL, 0,
             "Total packets", HFILL }
+        },
+        { &hf_ge_srtp_mbox_todo_2,
+          { "TODO", "ge_srtp.todo_2",
+            FT_NONE, BASE_NONE,
+            NULL, 0,
+            "TODO", HFILL }
         }
     };
 
