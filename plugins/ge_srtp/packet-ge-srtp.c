@@ -102,6 +102,34 @@ static const value_string ge_srtp_mbox_type[] = {
     { 0, NULL }
 };
 
+static const value_string ge_srtp_svc_req_type[] = {
+    { 0x00, "PLC Short Status Request" },
+    { 0x03, "Return Control Program Name" },
+    { 0x04, "Read System Memory" },
+    { 0x05, "Read Task Memory" },
+    { 0x06, "Read Program Block Memory" },
+    { 0x07, "Write System Memory" },
+    { 0x08, "Write Task Memory" },
+    { 0x09, "Write Program Block Memory" },
+    { 0x15, "Establish Datagram" },
+    { 0x16, "Update Datagram" },
+    { 0x17, "Cancel Datagram" },
+    { 0x20, "Programmer Logon" },
+    { 0x21, "Change PLC CPU Privilege Level" },
+    { 0x22, "Set PLC CPU Controller ID" },
+    { 0x23, "Set PLC State" },
+    { 0x24, "Set PLC Time/Date" },
+    { 0x25, "Return PLC Time/Date" },
+    { 0x38, "Return Fault Table" },
+    { 0x39, "Clear Fault Table" },
+    { 0x3F, "Program Store" },
+    { 0x40, "Program Load" },
+    { 0x43, "Return Controller Type and ID Information" },
+    { 0x44, "Toggle Force System Memory" },
+    { 0x48, "Write Datagram" },
+    { 0, NULL }
+};
+
 /* Packet length must be at least 32 for there to be a valid mailbox message */
 #define GE_SRTP_MIN_LENGTH 32
 
@@ -153,9 +181,6 @@ dissect_ge_srtp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
     col_add_fstr(pinfo->cinfo, COL_INFO, "%s",
             val_to_str(mbox_type, ge_srtp_mbox_type, "Unknown (0x%02x)"));
     if (mbox_type == 0x80) {
-        proto_item_append_text(mbox_type_ti, ": %s",
-                val_to_str(mbox_type, ge_srtp_mbox_type, "N/A"));
-
         proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_svc_req_code,
                 tvb, 42, 1, ENC_LITTLE_ENDIAN);
         proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_svc_req_data_len,
@@ -169,9 +194,6 @@ dissect_ge_srtp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
         proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_svc_req_data,
                 tvb, 51, 5, ENC_LITTLE_ENDIAN);
     } else if (mbox_type == 0x94) {
-        proto_item_append_text(mbox_type_ti, ": %s",
-                val_to_str(mbox_type, ge_srtp_mbox_type, "N/A"));
-
         proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_response_data_len,
                 tvb, 42, 2, ENC_LITTLE_ENDIAN);
         proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_ack_reserved,
@@ -189,17 +211,11 @@ dissect_ge_srtp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
         proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_plc_status_word,
                 tvb, 54, 2, ENC_LITTLE_ENDIAN);
     } else if (mbox_type == 0xC0) {
-        proto_item_append_text(mbox_type_ti, ": %s",
-                val_to_str(mbox_type, ge_srtp_mbox_type, "N/A"));
-
         proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_svc_req_code,
                 tvb, 42, 1, ENC_LITTLE_ENDIAN);
         proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_svc_req_data,
                 tvb, 43, 13, ENC_LITTLE_ENDIAN);
     } else if (mbox_type == 0xD1) {
-        proto_item_append_text(mbox_type_ti, ": %s",
-                val_to_str(mbox_type, ge_srtp_mbox_type, "N/A"));
-
         proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_major_error_status,
                 tvb, 42, 1, ENC_LITTLE_ENDIAN);
         proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_minor_error_status,
@@ -207,9 +223,6 @@ dissect_ge_srtp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
         proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_nack_reserved,
                 tvb, 44, 12, ENC_LITTLE_ENDIAN);
     } else if (mbox_type == 0xD4) {
-        proto_item_append_text(mbox_type_ti, ": %s",
-                    val_to_str(mbox_type, ge_srtp_mbox_type, "N/A"));
-
         proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_status_code,
                 tvb, 42, 1, ENC_LITTLE_ENDIAN);
         proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_status_data,
@@ -270,7 +283,7 @@ proto_register_ge_srtp(void)
         { &hf_ge_srtp_mbox_type,
           { "Mailbox Type", "ge_srtp.mbox_type",
             FT_UINT8, BASE_HEX,
-            NULL, 0,
+            VALS(ge_srtp_mbox_type), 0,
             "Mailbox message type code", HFILL }
         },
         { &hf_ge_srtp_mbox_src_id,
@@ -306,7 +319,7 @@ proto_register_ge_srtp(void)
         { &hf_ge_srtp_mbox_svc_req_code,
           { "Service request code", "ge_srtp.svc_req_code",
             FT_UINT8, BASE_HEX,
-            NULL, 0,
+            VALS(ge_srtp_svc_req_type), 0,
             "Service request code", HFILL }
         },
         { &hf_ge_srtp_mbox_svc_req_data,
