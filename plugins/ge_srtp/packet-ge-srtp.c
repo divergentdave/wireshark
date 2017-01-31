@@ -151,11 +151,6 @@ dissect_ge_srtp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
     ge_srtp_tree = proto_item_add_subtree(ti, ett_ge_srtp);
     proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_todo_1,
             tvb, 0, 24, ENC_NA);
-    todo_2_remaining = tvb_captured_length_remaining(tvb, 56);
-    if (todo_2_remaining > 0) {
-        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_todo_2,
-                tvb, 56, todo_2_remaining, ENC_NA);
-    }
 
     proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_reserved_1,
             tvb, 24, 2, ENC_LITTLE_ENDIAN);
@@ -247,6 +242,12 @@ dissect_ge_srtp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
                 tvb, 54, 2, ENC_LITTLE_ENDIAN);
     } else {
         expert_add_info(pinfo, mbox_type_ti, &ei_ge_srtp_mbox_type_unknown);
+    }
+
+    todo_2_remaining = tvb_captured_length_remaining(tvb, 56);
+    if (todo_2_remaining > 0) {
+        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_todo_2,
+                tvb, 56, todo_2_remaining, ENC_NA);
     }
 
     return tvb_captured_length(tvb);
