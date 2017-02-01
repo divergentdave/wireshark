@@ -45,6 +45,10 @@ void proto_reg_handoff_ge_srtp(void);
 
 static int proto_ge_srtp = -1;
 
+static int hf_ge_srtp_type = -1;
+static int hf_ge_srtp_seq_num = -1;
+static int hf_ge_srtp_next_msg_len = -1;
+
 static int hf_ge_srtp_mbox_todo_1 = -1;
 static int hf_ge_srtp_mbox_todo_2 = -1;
 
@@ -219,8 +223,16 @@ dissect_ge_srtp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
 
     ti = proto_tree_add_item(tree, proto_ge_srtp, tvb, 0, -1, ENC_NA);
     ge_srtp_tree = proto_item_add_subtree(ti, ett_ge_srtp);
+
+    proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_type,
+            tvb, 0, 2, ENC_LITTLE_ENDIAN);
+    proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_seq_num,
+            tvb, 2, 2, ENC_LITTLE_ENDIAN);
+    proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_next_msg_len,
+            tvb, 4, 2, ENC_LITTLE_ENDIAN);
+
     proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_todo_1,
-            tvb, 0, 24, ENC_NA);
+            tvb, 6, 18, ENC_NA);
 
     proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_reserved_1,
             tvb, 24, 2, ENC_LITTLE_ENDIAN);
@@ -340,6 +352,24 @@ proto_register_ge_srtp(void)
     expert_module_t *expert_ge_srtp;
 
     static hf_register_info hf[] = {
+        { &hf_ge_srtp_type,
+          { "SRTP Packet Type", "ge_srtp.type",
+            FT_UINT16, BASE_HEX,
+            NULL, 0,
+            "SRTP Packet Type", HFILL }
+        },
+        { &hf_ge_srtp_seq_num,
+          { "SRTP Sequence Number", "ge_srtp.seq_num",
+            FT_UINT16, BASE_HEX,
+            NULL, 0,
+            "SRTP Sequence Number", HFILL }
+        },
+        { &hf_ge_srtp_next_msg_len,
+          { "Next Message Length", "ge_srtp.next_msg_len",
+            FT_UINT16, BASE_DEC,
+            NULL, 0,
+            "Next Message Length", HFILL }
+        },
         { &hf_ge_srtp_mbox_todo_1,
           { "TODO", "ge_srtp.todo_1",
             FT_NONE, BASE_NONE,
@@ -365,7 +395,7 @@ proto_register_ge_srtp(void)
             "Reserved field, must be zero", HFILL }
         },
         { &hf_ge_srtp_mbox_seq_num,
-          { "Sequence Number", "ge_srtp.mbox_seq_num",
+          { "Mailbox Sequence Number", "ge_srtp.mbox_seq_num",
             FT_UINT8, BASE_DEC,
             NULL, 0,
             "Mailbox message sequence number", HFILL }
