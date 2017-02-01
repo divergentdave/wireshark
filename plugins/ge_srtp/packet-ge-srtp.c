@@ -65,8 +65,6 @@ static int hf_ge_srtp_mbox_svc_req_data = -1;
 
 static int hf_ge_srtp_mbox_svc_req_data_len = -1;
 static int hf_ge_srtp_mbox_svc_req_reserved = -1;
-static int hf_ge_srtp_mbox_packet_num_2 = -1; // TODO: coalescse these into one field, read it from different places
-static int hf_ge_srtp_mbox_total_packets_2 = -1;
 
 /* Completion ACK/Completion ACK with text buffer */
 static int hf_ge_srtp_mbox_status_code = -1;
@@ -79,8 +77,6 @@ static int hf_ge_srtp_mbox_plc_status_word = -1; // TODO: bitfield
 
 static int hf_ge_srtp_mbox_response_data_len = -1;
 static int hf_ge_srtp_mbox_ack_reserved = -1;
-static int hf_ge_srtp_mbox_packet_num_3 = -1;
-static int hf_ge_srtp_mbox_total_packets_3 = -1;
 
 /* Error NACK */
 static int hf_ge_srtp_mbox_major_error_status = -1;
@@ -240,10 +236,6 @@ dissect_ge_srtp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
             tvb, 32, 4, ENC_LITTLE_ENDIAN);
     proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_dst_id,
             tvb, 36, 4, ENC_LITTLE_ENDIAN);
-    proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_packet_num,
-            tvb, 40, 1, ENC_LITTLE_ENDIAN);
-    proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_total_packets,
-            tvb, 41, 1, ENC_LITTLE_ENDIAN);
 
     guint8 mbox_type = tvb_get_guint8(tvb, 31);
     col_clear(pinfo->cinfo, COL_INFO);
@@ -264,9 +256,9 @@ dissect_ge_srtp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
                 tvb, 43, 4, ENC_LITTLE_ENDIAN);
         proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_svc_req_reserved,
                 tvb, 47, 1, ENC_LITTLE_ENDIAN);
-        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_packet_num_2,
+        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_packet_num,
                 tvb, 48, 1, ENC_LITTLE_ENDIAN);
-        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_total_packets_2,
+        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_total_packets,
                 tvb, 49, 1, ENC_LITTLE_ENDIAN);
         proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_svc_req_data,
                 tvb, 51, 5, ENC_LITTLE_ENDIAN);
@@ -275,9 +267,9 @@ dissect_ge_srtp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
                 tvb, 42, 2, ENC_LITTLE_ENDIAN);
         proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_ack_reserved,
                 tvb, 44, 4, ENC_LITTLE_ENDIAN);
-        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_packet_num_3,
+        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_packet_num,
                 tvb, 48, 1, ENC_LITTLE_ENDIAN);
-        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_total_packets_3,
+        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_total_packets,
                 tvb, 49, 1, ENC_LITTLE_ENDIAN);
         proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_control_program_num,
                 tvb, 50, 1, ENC_LITTLE_ENDIAN);
@@ -288,11 +280,21 @@ dissect_ge_srtp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
         proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_plc_status_word,
                 tvb, 54, 2, ENC_LITTLE_ENDIAN);
     } else if (mbox_type == 0xC0) {
+        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_packet_num,
+                tvb, 40, 1, ENC_LITTLE_ENDIAN);
+        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_total_packets,
+                tvb, 41, 1, ENC_LITTLE_ENDIAN);
+
         proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_svc_req_code,
                 tvb, 42, 1, ENC_LITTLE_ENDIAN);
         proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_svc_req_data,
                 tvb, 43, 13, ENC_LITTLE_ENDIAN);
     } else if (mbox_type == 0xD1) {
+        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_packet_num,
+                tvb, 40, 1, ENC_LITTLE_ENDIAN);
+        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_total_packets,
+                tvb, 41, 1, ENC_LITTLE_ENDIAN);
+
         proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_major_error_status,
                 tvb, 42, 1, ENC_LITTLE_ENDIAN);
         proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_minor_error_status,
@@ -300,6 +302,11 @@ dissect_ge_srtp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
         proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_nack_reserved,
                 tvb, 44, 12, ENC_LITTLE_ENDIAN);
     } else if (mbox_type == 0xD4) {
+        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_packet_num,
+                tvb, 40, 1, ENC_LITTLE_ENDIAN);
+        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_total_packets,
+                tvb, 41, 1, ENC_LITTLE_ENDIAN);
+
         proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_status_code,
                 tvb, 42, 1, ENC_LITTLE_ENDIAN);
         proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_status_data,
@@ -423,18 +430,6 @@ proto_register_ge_srtp(void)
             NULL, 0,
             "Reserved", HFILL }
         },
-        { &hf_ge_srtp_mbox_packet_num_2,
-          { "Packet number", "ge_srtp.packet_num_2",
-            FT_UINT8, BASE_DEC,
-            NULL, 0,
-            "Packet number", HFILL }
-        },
-        { &hf_ge_srtp_mbox_total_packets_2,
-          { "Total packets", "ge_srtp.total_packets_2",
-            FT_UINT8, BASE_DEC,
-            NULL, 0,
-            "Total packets", HFILL }
-        },
         { &hf_ge_srtp_mbox_status_code,
           { "Status code", "ge_srtp.status_code",
             FT_UINT8, BASE_HEX,
@@ -488,18 +483,6 @@ proto_register_ge_srtp(void)
             FT_NONE, BASE_NONE,
             NULL, 0,
             "Reserved", HFILL }
-        },
-        { &hf_ge_srtp_mbox_packet_num_3,
-          { "Packet number", "ge_srtp.packet_num_3",
-            FT_UINT8, BASE_DEC,
-            NULL, 0,
-            "Packet number", HFILL }
-        },
-        { &hf_ge_srtp_mbox_total_packets_3,
-          { "Total packets", "ge_srtp.total_packets_3",
-            FT_UINT8, BASE_DEC,
-            NULL, 0,
-            "Total packets", HFILL }
         },
         { &hf_ge_srtp_mbox_major_error_status,
           { "Major error status", "ge_srtp.major_error_status",
