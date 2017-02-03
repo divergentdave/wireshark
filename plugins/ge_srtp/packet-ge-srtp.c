@@ -204,6 +204,17 @@ static const value_string ge_srtp_svc_req_type[] = {
     { 0, NULL }
 };
 
+static int
+bcd_decode_byte(guint8 byte)
+{
+    guint8 low_nibble, high_nibble;
+    low_nibble = byte & 0x0f;
+    high_nibble = (byte & 0xf0) >> 4;
+    if (low_nibble > 9 || high_nibble > 9)
+        return -1;
+    return high_nibble * 10 + low_nibble;
+}
+
 #define FRAME_HEADER_LEN 18
 
 static int
@@ -215,6 +226,7 @@ dissect_ge_srtp_message(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
     proto_tree *ge_srtp_tree;
 
     guint8 mbox_type;
+    int timestamp_hr, timestamp_min, timestamp_sec;
     guint next_message_len;
 
     col_set_str(pinfo->cinfo, COL_PROTOCOL, "GE SRTP");
@@ -233,8 +245,18 @@ dissect_ge_srtp_message(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
     proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_todo,
             tvb, 6, 18, ENC_NA);
 
-    proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_timestamp,
-            tvb, 26, 3, ENC_LITTLE_ENDIAN);
+    timestamp_hr = bcd_decode_byte(tvb_get_guint8(tvb, 26));
+    timestamp_min = bcd_decode_byte(tvb_get_guint8(tvb, 27));
+    timestamp_sec = bcd_decode_byte(tvb_get_guint8(tvb, 28));
+    if (timestamp_hr != -1 && timestamp_min != -1 && timestamp_sec != -1) {
+        proto_tree_add_bytes_format_value(ge_srtp_tree,
+                hf_ge_srtp_mbox_timestamp,
+                tvb, 26, 3, NULL, "%02d:%02d:%02d",
+                timestamp_hr, timestamp_min, timestamp_sec);
+    } else {
+        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_timestamp,
+                tvb, 26, 3, ENC_LITTLE_ENDIAN);
+    }
     proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_seq_num,
             tvb, 30, 1, ENC_LITTLE_ENDIAN);
     mbox_type_ti = proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_type,
@@ -385,7 +407,7 @@ proto_register_ge_srtp(void)
         },
         { &hf_ge_srtp_mbox_timestamp,
           { "Timestamp", "ge_srtp.timestamp",
-            FT_UINT24, BASE_HEX,
+            FT_BYTES, BASE_NONE,
             NULL, 0,
             "Timestamp (optional)", HFILL }
         },
