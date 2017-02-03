@@ -54,9 +54,7 @@ static int hf_ge_srtp_next_msg_len = -1;
 static int hf_ge_srtp_mbox_todo = -1;
 
 /* Mailbox messages */
-static int hf_ge_srtp_mbox_reserved_1 = -1; // TODO: what's the best practices on reserved fields?
 static int hf_ge_srtp_mbox_timestamp = -1; // TODO: BCD decode time
-static int hf_ge_srtp_mbox_reserved_2 = -1;
 static int hf_ge_srtp_mbox_seq_num = -1;
 static int hf_ge_srtp_mbox_type = -1;
 static int hf_ge_srtp_mbox_src_id = -1;
@@ -69,7 +67,6 @@ static int hf_ge_srtp_mbox_svc_req_code = -1;
 static int hf_ge_srtp_mbox_svc_req_data = -1;
 
 static int hf_ge_srtp_mbox_svc_req_data_len = -1;
-static int hf_ge_srtp_mbox_svc_req_reserved = -1;
 
 /* Completion ACK/Completion ACK with text buffer */
 static int hf_ge_srtp_mbox_status_code = -1;
@@ -81,12 +78,10 @@ static int hf_ge_srtp_mbox_last_sweep = -1;
 static int hf_ge_srtp_mbox_plc_status_word = -1; // TODO: bitfield
 
 static int hf_ge_srtp_mbox_response_data_len = -1;
-static int hf_ge_srtp_mbox_ack_reserved = -1;
 
 /* Error NACK */
 static int hf_ge_srtp_mbox_major_error_status = -1;
 static int hf_ge_srtp_mbox_minor_error_status = -1;
-static int hf_ge_srtp_mbox_nack_reserved = -1;
 
 static int hf_ge_srtp_text_buffer = -1;
 
@@ -238,12 +233,8 @@ dissect_ge_srtp_message(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
     proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_todo,
             tvb, 6, 18, ENC_NA);
 
-    proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_reserved_1,
-            tvb, 24, 2, ENC_LITTLE_ENDIAN);
     proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_timestamp,
             tvb, 26, 3, ENC_LITTLE_ENDIAN);
-    proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_reserved_2,
-            tvb, 29, 1, ENC_LITTLE_ENDIAN);
     proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_seq_num,
             tvb, 30, 1, ENC_LITTLE_ENDIAN);
     mbox_type_ti = proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_type,
@@ -270,8 +261,6 @@ dissect_ge_srtp_message(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
                 tvb, 42, 1, ENC_LITTLE_ENDIAN);
         proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_svc_req_data_len,
                 tvb, 43, 4, ENC_LITTLE_ENDIAN);
-        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_svc_req_reserved,
-                tvb, 47, 1, ENC_LITTLE_ENDIAN);
         proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_packet_num,
                 tvb, 48, 1, ENC_LITTLE_ENDIAN);
         proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_total_packets,
@@ -285,8 +274,6 @@ dissect_ge_srtp_message(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
     } else if (mbox_type == 0x94) {  // Completion ACK with Text Buffer
         proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_response_data_len,
                 tvb, 42, 2, ENC_LITTLE_ENDIAN);
-        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_ack_reserved,
-                tvb, 44, 4, ENC_LITTLE_ENDIAN);
         proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_packet_num,
                 tvb, 48, 1, ENC_LITTLE_ENDIAN);
         proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_total_packets,
@@ -323,8 +310,6 @@ dissect_ge_srtp_message(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
                 tvb, 42, 1, ENC_LITTLE_ENDIAN);
         proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_minor_error_status,
                 tvb, 43, 1, ENC_LITTLE_ENDIAN);
-        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_nack_reserved,
-                tvb, 44, 12, ENC_LITTLE_ENDIAN);
     } else if (mbox_type == 0xD4) {  // Completion ACK
         proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_packet_num,
                 tvb, 40, 1, ENC_LITTLE_ENDIAN);
@@ -398,23 +383,11 @@ proto_register_ge_srtp(void)
             NULL, 0,
             "TODO", HFILL }
         },
-        { &hf_ge_srtp_mbox_reserved_1,
-          { "Reserved (0)", "ge_srtp.reserved_2",
-            FT_UINT16, BASE_HEX,
-            NULL, 0,
-            "Reserved field, must be zero", HFILL }
-        },
         { &hf_ge_srtp_mbox_timestamp,
           { "Timestamp", "ge_srtp.timestamp",
             FT_UINT24, BASE_HEX,
             NULL, 0,
             "Timestamp (optional)", HFILL }
-        },
-        { &hf_ge_srtp_mbox_reserved_2,
-          { "Reserved (0)", "ge_srtp.reserved_2",
-            FT_UINT8, BASE_HEX,
-            NULL, 0,
-            "Reserved field, must be zero", HFILL }
         },
         { &hf_ge_srtp_mbox_seq_num,
           { "Mailbox Sequence Number", "ge_srtp.mbox_seq_num",
@@ -470,12 +443,6 @@ proto_register_ge_srtp(void)
             NULL, 0,
             "Service request data length", HFILL }
         },
-        { &hf_ge_srtp_mbox_svc_req_reserved,
-          { "Reserved", "ge_srtp.svc_req_reserved",
-            FT_NONE, BASE_NONE,
-            NULL, 0,
-            "Reserved", HFILL }
-        },
         { &hf_ge_srtp_mbox_status_code,
           { "Status code", "ge_srtp.status_code",
             FT_UINT8, BASE_HEX,
@@ -524,12 +491,6 @@ proto_register_ge_srtp(void)
             NULL, 0,
             "Response data length", HFILL }
         },
-        { &hf_ge_srtp_mbox_ack_reserved,
-          { "Reserved", "ge_srtp.ack_reserved",
-            FT_NONE, BASE_NONE,
-            NULL, 0,
-            "Reserved", HFILL }
-        },
         { &hf_ge_srtp_mbox_major_error_status,
           { "Major error status", "ge_srtp.major_error_status",
             FT_UINT8, BASE_HEX,
@@ -541,12 +502,6 @@ proto_register_ge_srtp(void)
             FT_UINT8, BASE_HEX,
             NULL, 0,
             "Minor error status", HFILL }
-        },
-        { &hf_ge_srtp_mbox_nack_reserved,
-          { "Reserved", "ge_srtp.nack_reserved",
-            FT_NONE, BASE_NONE,
-            NULL, 0,
-            "Reserved", HFILL }
         },
         { &hf_ge_srtp_text_buffer,
           { "Text Buffer", "ge_srtp.text_buffer",
