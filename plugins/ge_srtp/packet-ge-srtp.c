@@ -38,6 +38,8 @@
 
 #include <epan/prefs.h>
 
+#include <epan/dissectors/packet-tcp.h>
+
 #include <stdlib.h>
 
 void proto_register_ge_srtp(void);
@@ -49,8 +51,7 @@ static int hf_ge_srtp_type = -1;
 static int hf_ge_srtp_seq_num = -1;
 static int hf_ge_srtp_next_msg_len = -1;
 
-static int hf_ge_srtp_mbox_todo_1 = -1;
-static int hf_ge_srtp_mbox_todo_2 = -1;
+static int hf_ge_srtp_mbox_todo = -1;
 
 /* Mailbox messages */
 static int hf_ge_srtp_mbox_reserved_1 = -1; // TODO: what's the best practices on reserved fields?
@@ -87,9 +88,13 @@ static int hf_ge_srtp_mbox_major_error_status = -1;
 static int hf_ge_srtp_mbox_minor_error_status = -1;
 static int hf_ge_srtp_mbox_nack_reserved = -1;
 
+static int hf_ge_srtp_text_buffer = -1;
+
 static expert_field ei_ge_srtp_mbox_type_unknown = EI_INIT;
 
 #define GE_SRTP_TCP_PORT 18245
+#define NEXT_MESSAGE_LENGTH_OFFSET 4
+#define SRTP_MAILBOX_MESSAGE_LENGTH 56
 
 static gint ett_ge_srtp = -1;
 
@@ -204,20 +209,18 @@ static const value_string ge_srtp_svc_req_type[] = {
     { 0, NULL }
 };
 
-/* Packet length must be at least 32 for there to be a valid mailbox message */
-#define GE_SRTP_MIN_LENGTH 32
+#define FRAME_HEADER_LEN 18
 
 static int
-dissect_ge_srtp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
+dissect_ge_srtp_message(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
         void *data _U_)
 {
     proto_item *ti;
     proto_item *mbox_type_ti;
     proto_tree *ge_srtp_tree;
-    gint todo_2_remaining;
 
-    if (tvb_reported_length(tvb) < GE_SRTP_MIN_LENGTH)
-        return 0;
+    guint8 mbox_type;
+    guint next_message_len;
 
     col_set_str(pinfo->cinfo, COL_PROTOCOL, "GE SRTP");
 
@@ -229,9 +232,10 @@ dissect_ge_srtp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
     proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_seq_num,
             tvb, 2, 2, ENC_LITTLE_ENDIAN);
     proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_next_msg_len,
-            tvb, 4, 2, ENC_LITTLE_ENDIAN);
+            tvb, NEXT_MESSAGE_LENGTH_OFFSET , 2, ENC_LITTLE_ENDIAN);
+    next_message_len = (guint)tvb_get_letohs(tvb, NEXT_MESSAGE_LENGTH_OFFSET) + SRTP_MAILBOX_MESSAGE_LENGTH;
 
-    proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_todo_1,
+    proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_todo,
             tvb, 6, 18, ENC_NA);
 
     proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_reserved_1,
@@ -249,7 +253,7 @@ dissect_ge_srtp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
     proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_dst_id,
             tvb, 36, 4, ENC_LITTLE_ENDIAN);
 
-    guint8 mbox_type = tvb_get_guint8(tvb, 31);
+    mbox_type = tvb_get_guint8(tvb, 31);
     col_clear(pinfo->cinfo, COL_INFO);
     if (mbox_type == 0xC0 || mbox_type == 0x80) {
         guint8 svc_req_code = tvb_get_guint8(tvb, 42);
@@ -261,7 +265,7 @@ dissect_ge_srtp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
         col_add_fstr(pinfo->cinfo, COL_INFO, "%s",
                 val_to_str(mbox_type, ge_srtp_mbox_type, "Unknown (0x%02x)"));
     }
-    if (mbox_type == 0x80) {
+    if (mbox_type == 0x80) {  // Initial Request with Text Buffer
         proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_svc_req_code,
                 tvb, 42, 1, ENC_LITTLE_ENDIAN);
         proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_svc_req_data_len,
@@ -274,7 +278,11 @@ dissect_ge_srtp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
                 tvb, 49, 1, ENC_LITTLE_ENDIAN);
         proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_svc_req_data,
                 tvb, 51, 5, ENC_LITTLE_ENDIAN);
-    } else if (mbox_type == 0x94) {
+
+        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_text_buffer,
+                tvb, SRTP_MAILBOX_MESSAGE_LENGTH, next_message_len,
+                ENC_LITTLE_ENDIAN);
+    } else if (mbox_type == 0x94) {  // Completion ACK with Text Buffer
         proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_response_data_len,
                 tvb, 42, 2, ENC_LITTLE_ENDIAN);
         proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_ack_reserved,
@@ -291,7 +299,11 @@ dissect_ge_srtp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
                 tvb, 52, 2, ENC_LITTLE_ENDIAN);
         proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_plc_status_word,
                 tvb, 54, 2, ENC_LITTLE_ENDIAN);
-    } else if (mbox_type == 0xC0) {
+
+        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_text_buffer,
+                tvb, SRTP_MAILBOX_MESSAGE_LENGTH, next_message_len,
+                ENC_LITTLE_ENDIAN);
+    } else if (mbox_type == 0xC0) {  // Initial Request
         proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_packet_num,
                 tvb, 40, 1, ENC_LITTLE_ENDIAN);
         proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_total_packets,
@@ -301,7 +313,7 @@ dissect_ge_srtp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
                 tvb, 42, 1, ENC_LITTLE_ENDIAN);
         proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_svc_req_data,
                 tvb, 43, 13, ENC_LITTLE_ENDIAN);
-    } else if (mbox_type == 0xD1) {
+    } else if (mbox_type == 0xD1) {  // Error Nack
         proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_packet_num,
                 tvb, 40, 1, ENC_LITTLE_ENDIAN);
         proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_total_packets,
@@ -313,7 +325,7 @@ dissect_ge_srtp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
                 tvb, 43, 1, ENC_LITTLE_ENDIAN);
         proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_nack_reserved,
                 tvb, 44, 12, ENC_LITTLE_ENDIAN);
-    } else if (mbox_type == 0xD4) {
+    } else if (mbox_type == 0xD4) {  // Completion ACK
         proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_packet_num,
                 tvb, 40, 1, ENC_LITTLE_ENDIAN);
         proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_total_packets,
@@ -337,12 +349,22 @@ dissect_ge_srtp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
         expert_add_info(pinfo, mbox_type_ti, &ei_ge_srtp_mbox_type_unknown);
     }
 
-    todo_2_remaining = tvb_captured_length_remaining(tvb, 56);
-    if (todo_2_remaining > 0) {
-        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_todo_2,
-                tvb, 56, todo_2_remaining, ENC_NA);
-    }
+    return tvb_captured_length(tvb);
+}
 
+static guint
+get_ge_srtp_message_len(packet_info *pinfo _U_, tvbuff_t *tvb, int offset,
+        void *data _U_)
+{
+    return (guint)tvb_get_letohs(tvb, offset + NEXT_MESSAGE_LENGTH_OFFSET) + SRTP_MAILBOX_MESSAGE_LENGTH;
+}
+
+static int
+dissect_ge_srtp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
+        void *data)
+{
+    tcp_dissect_pdus(tvb, pinfo, tree, TRUE, FRAME_HEADER_LEN,
+            get_ge_srtp_message_len, dissect_ge_srtp_message, data);
     return tvb_captured_length(tvb);
 }
 
@@ -370,8 +392,8 @@ proto_register_ge_srtp(void)
             NULL, 0,
             "Next Message Length", HFILL }
         },
-        { &hf_ge_srtp_mbox_todo_1,
-          { "TODO", "ge_srtp.todo_1",
+        { &hf_ge_srtp_mbox_todo,
+          { "TODO", "ge_srtp.todo",
             FT_NONE, BASE_NONE,
             NULL, 0,
             "TODO", HFILL }
@@ -429,12 +451,6 @@ proto_register_ge_srtp(void)
             FT_UINT8, BASE_DEC,
             NULL, 0,
             "Total packets", HFILL }
-        },
-        { &hf_ge_srtp_mbox_todo_2,
-          { "TODO", "ge_srtp.todo_2",
-            FT_NONE, BASE_NONE,
-            NULL, 0,
-            "TODO", HFILL }
         },
         { &hf_ge_srtp_mbox_svc_req_code,
           { "Service request code", "ge_srtp.svc_req_code",
@@ -531,6 +547,12 @@ proto_register_ge_srtp(void)
             FT_NONE, BASE_NONE,
             NULL, 0,
             "Reserved", HFILL }
+        },
+        { &hf_ge_srtp_text_buffer,
+          { "Text Buffer", "ge_srtp.text_buffer",
+            FT_NONE, BASE_NONE,
+            NULL, 0,
+            "Text Buffer", HFILL }
         }
     };
 
