@@ -301,25 +301,27 @@ dissect_ge_srtp_message(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
     // Only allocate a new hash element when dissecting a request
     // (0xC0 is Initial Request, 0x80 is Initial Request with Text Buffer)
     mbox_type = tvb_get_guint8(tvb, 31);
-    if (!request_val && (mbox_type == 0x80 || mbox_type == 0xC0)) {
-        new_request_key = wmem_new(wmem_file_scope(),
-                struct ge_srtp_request_key);
-        *new_request_key = request_key;
+    if (!pinfo->fd->flags.visited) {
+        if (!request_val && (mbox_type == 0x80 || mbox_type == 0xC0)) {
+            new_request_key = wmem_new(wmem_file_scope(),
+                    struct ge_srtp_request_key);
+            *new_request_key = request_key;
 
-        request_val = wmem_new(wmem_file_scope(),
-                struct ge_srtp_request_val);
-        request_val->req_num = pinfo->num;
-        request_val->resp_num = 0;
-        request_val->svc_req_type = tvb_get_guint8(tvb, 42);
+            request_val = wmem_new(wmem_file_scope(),
+                    struct ge_srtp_request_val);
+            request_val->req_num = pinfo->num;
+            request_val->resp_num = 0;
+            request_val->svc_req_type = tvb_get_guint8(tvb, 42);
 
-        g_hash_table_insert(ge_srtp_request_hash, new_request_key,
-                request_val);
-    }
-    // (0xD4 is Completion ACK, 0x94 is Completion ACK with Text Buffer,
-    // and 0xD1 is Error NACK)
-    if (request_val && (mbox_type == 0xD4 || mbox_type == 0x94 ||
-                mbox_type == 0xD1)) {
-        request_val->resp_num = pinfo->num;
+            g_hash_table_insert(ge_srtp_request_hash, new_request_key,
+                    request_val);
+        }
+        // (0xD4 is Completion ACK, 0x94 is Completion ACK with Text Buffer,
+        // and 0xD1 is Error NACK)
+        if (request_val && (mbox_type == 0xD4 || mbox_type == 0x94 ||
+                    mbox_type == 0xD1)) {
+            request_val->resp_num = pinfo->num;
+        }
     }
 
     ti = proto_tree_add_item(tree, proto_ge_srtp, tvb, 0, -1, ENC_NA);
