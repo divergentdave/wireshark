@@ -370,6 +370,8 @@ dissect_ge_srtp_message(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
                 val_to_str(mbox_type, ge_srtp_mbox_type, "unused"),
                 val_to_str(request_val->svc_req_type, ge_srtp_svc_req_type,
                     "Service request 0x%02x"));
+        proto_tree_add_uint(ge_srtp_tree, hf_ge_srtp_mbox_svc_req_code,
+                tvb, 0, 0, request_val->svc_req_type);
     } else {
         col_add_fstr(pinfo->cinfo, COL_INFO, "%s",
                 val_to_str(mbox_type, ge_srtp_mbox_type, "Unknown (0x%02x)"));
