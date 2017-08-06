@@ -32,9 +32,7 @@
 #include <glib.h>
 
 #include <epan/packet.h>
-#include <epan/expert.h>
 #include <epan/wmem/wmem.h>
-#include <epan/expert.h>
 #include <epan/conversation.h>
 
 #include <epan/prefs.h>
@@ -87,8 +85,6 @@ static int hf_ge_srtp_mbox_major_error_status = -1;
 static int hf_ge_srtp_mbox_minor_error_status = -1;
 
 static int hf_ge_srtp_text_buffer = -1;
-
-static expert_field ei_ge_srtp_mbox_type_unknown = EI_INIT;
 
 #define GE_SRTP_TCP_PORT 18245
 #define NEXT_MESSAGE_LENGTH_OFFSET 4
@@ -279,7 +275,6 @@ dissect_ge_srtp_message(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
         void *data _U_)
 {
     proto_item *ti;
-    proto_item *mbox_type_ti;
     proto_tree *ge_srtp_tree;
     conversation_t *conversation;
     struct ge_srtp_request_key request_key, *new_request_key;
@@ -343,140 +338,140 @@ dissect_ge_srtp_message(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
                 val_to_str(mbox_type, ge_srtp_mbox_type, "Unknown (0x%02x)"));
     }
 
-    ti = proto_tree_add_item(tree, proto_ge_srtp, tvb, 0, -1, ENC_NA);
-    ge_srtp_tree = proto_item_add_subtree(ti, ett_ge_srtp);
+    if (tree) {
+        ti = proto_tree_add_item(tree, proto_ge_srtp, tvb, 0, -1, ENC_NA);
+        ge_srtp_tree = proto_item_add_subtree(ti, ett_ge_srtp);
 
-    if (mbox_type == 0xC0 || mbox_type == 0x80) {
-        if (request_val) {
-            if (request_val->resp_num) {
-                proto_tree_add_uint_format(ge_srtp_tree, hf_ge_srtp_respframe,
-                        tvb, 0, 0, request_val->resp_num,
-                        "The reply to this request is in frame %u",
-                        request_val->resp_num);
+        if (mbox_type == 0xC0 || mbox_type == 0x80) {
+            if (request_val) {
+                if (request_val->resp_num) {
+                    proto_tree_add_uint_format(ge_srtp_tree, hf_ge_srtp_respframe,
+                            tvb, 0, 0, request_val->resp_num,
+                            "The reply to this request is in frame %u",
+                            request_val->resp_num);
+                }
+            }
+        } else if (mbox_type == 0xD4 || mbox_type == 0x94 ||
+                mbox_type == 0xD1) {
+            if (request_val) {
+                proto_tree_add_uint(ge_srtp_tree, hf_ge_srtp_mbox_svc_req_code,
+                        tvb, 0, 0, request_val->svc_req_type);
+                if (request_val->req_num) {
+                    proto_tree_add_uint_format(ge_srtp_tree, hf_ge_srtp_reqframe,
+                            tvb, 0, 0, request_val->req_num,
+                            "This is a reply to a request in frame %u",
+                            request_val->req_num);
+                }
             }
         }
-    } else if (mbox_type == 0xD4 || mbox_type == 0x94 ||
-            mbox_type == 0xD1) {
-        if (request_val) {
-            proto_tree_add_uint(ge_srtp_tree, hf_ge_srtp_mbox_svc_req_code,
-                    tvb, 0, 0, request_val->svc_req_type);
-            if (request_val->req_num) {
-                proto_tree_add_uint_format(ge_srtp_tree, hf_ge_srtp_reqframe,
-                        tvb, 0, 0, request_val->req_num,
-                        "This is a reply to a request in frame %u",
-                        request_val->req_num);
-            }
+
+        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_type,
+                tvb, 0, 2, ENC_LITTLE_ENDIAN);
+        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_seq_num,
+                tvb, 2, 2, ENC_LITTLE_ENDIAN);
+        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_next_msg_len,
+                tvb, NEXT_MESSAGE_LENGTH_OFFSET , 2, ENC_LITTLE_ENDIAN);
+        next_message_len = (guint)tvb_get_letohs(tvb, NEXT_MESSAGE_LENGTH_OFFSET) + SRTP_MAILBOX_MESSAGE_LENGTH;
+
+        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_todo,
+                tvb, 6, 18, ENC_NA);
+
+        timestamp_hr = bcd_decode_byte(tvb_get_guint8(tvb, 26));
+        timestamp_min = bcd_decode_byte(tvb_get_guint8(tvb, 27));
+        timestamp_sec = bcd_decode_byte(tvb_get_guint8(tvb, 28));
+        if (timestamp_hr != -1 && timestamp_min != -1 && timestamp_sec != -1) {
+            proto_tree_add_bytes_format_value(ge_srtp_tree,
+                    hf_ge_srtp_mbox_timestamp,
+                    tvb, 26, 3, NULL, "%02d:%02d:%02d",
+                    timestamp_hr, timestamp_min, timestamp_sec);
+        } else {
+            proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_timestamp,
+                    tvb, 26, 3, ENC_LITTLE_ENDIAN);
         }
-    }
+        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_seq_num,
+                tvb, 30, 1, ENC_LITTLE_ENDIAN);
+        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_type,
+                tvb, 31, 1, ENC_LITTLE_ENDIAN);
+        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_src_id,
+                tvb, 32, 4, ENC_LITTLE_ENDIAN);
+        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_dst_id,
+                tvb, 36, 4, ENC_LITTLE_ENDIAN);
 
-    proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_type,
-            tvb, 0, 2, ENC_LITTLE_ENDIAN);
-    proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_seq_num,
-            tvb, 2, 2, ENC_LITTLE_ENDIAN);
-    proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_next_msg_len,
-            tvb, NEXT_MESSAGE_LENGTH_OFFSET , 2, ENC_LITTLE_ENDIAN);
-    next_message_len = (guint)tvb_get_letohs(tvb, NEXT_MESSAGE_LENGTH_OFFSET) + SRTP_MAILBOX_MESSAGE_LENGTH;
+        if (mbox_type == 0x80) {  // Initial Request with Text Buffer
+            proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_svc_req_code,
+                    tvb, 42, 1, ENC_LITTLE_ENDIAN);
+            proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_svc_req_data_len,
+                    tvb, 43, 4, ENC_LITTLE_ENDIAN);
+            proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_packet_num,
+                    tvb, 48, 1, ENC_LITTLE_ENDIAN);
+            proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_total_packets,
+                    tvb, 49, 1, ENC_LITTLE_ENDIAN);
+            proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_svc_req_data,
+                    tvb, 51, 5, ENC_LITTLE_ENDIAN);
 
-    proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_todo,
-            tvb, 6, 18, ENC_NA);
+            proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_text_buffer,
+                    tvb, SRTP_MAILBOX_MESSAGE_LENGTH, next_message_len,
+                    ENC_LITTLE_ENDIAN);
+        } else if (mbox_type == 0x94) {  // Completion ACK with Text Buffer
+            proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_response_data_len,
+                    tvb, 42, 2, ENC_LITTLE_ENDIAN);
+            proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_packet_num,
+                    tvb, 48, 1, ENC_LITTLE_ENDIAN);
+            proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_total_packets,
+                    tvb, 49, 1, ENC_LITTLE_ENDIAN);
+            proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_control_program_num,
+                    tvb, 50, 1, ENC_LITTLE_ENDIAN);
+            proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_privilege_level,
+                    tvb, 51, 1, ENC_LITTLE_ENDIAN);
+            proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_last_sweep,
+                    tvb, 52, 2, ENC_LITTLE_ENDIAN);
+            proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_plc_status_word,
+                    tvb, 54, 2, ENC_LITTLE_ENDIAN);
 
-    timestamp_hr = bcd_decode_byte(tvb_get_guint8(tvb, 26));
-    timestamp_min = bcd_decode_byte(tvb_get_guint8(tvb, 27));
-    timestamp_sec = bcd_decode_byte(tvb_get_guint8(tvb, 28));
-    if (timestamp_hr != -1 && timestamp_min != -1 && timestamp_sec != -1) {
-        proto_tree_add_bytes_format_value(ge_srtp_tree,
-                hf_ge_srtp_mbox_timestamp,
-                tvb, 26, 3, NULL, "%02d:%02d:%02d",
-                timestamp_hr, timestamp_min, timestamp_sec);
-    } else {
-        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_timestamp,
-                tvb, 26, 3, ENC_LITTLE_ENDIAN);
-    }
-    proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_seq_num,
-            tvb, 30, 1, ENC_LITTLE_ENDIAN);
-    mbox_type_ti = proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_type,
-            tvb, 31, 1, ENC_LITTLE_ENDIAN);
-    proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_src_id,
-            tvb, 32, 4, ENC_LITTLE_ENDIAN);
-    proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_dst_id,
-            tvb, 36, 4, ENC_LITTLE_ENDIAN);
+            proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_text_buffer,
+                    tvb, SRTP_MAILBOX_MESSAGE_LENGTH, next_message_len,
+                    ENC_LITTLE_ENDIAN);
+        } else if (mbox_type == 0xC0) {  // Initial Request
+            proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_packet_num,
+                    tvb, 40, 1, ENC_LITTLE_ENDIAN);
+            proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_total_packets,
+                    tvb, 41, 1, ENC_LITTLE_ENDIAN);
 
-    if (mbox_type == 0x80) {  // Initial Request with Text Buffer
-        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_svc_req_code,
-                tvb, 42, 1, ENC_LITTLE_ENDIAN);
-        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_svc_req_data_len,
-                tvb, 43, 4, ENC_LITTLE_ENDIAN);
-        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_packet_num,
-                tvb, 48, 1, ENC_LITTLE_ENDIAN);
-        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_total_packets,
-                tvb, 49, 1, ENC_LITTLE_ENDIAN);
-        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_svc_req_data,
-                tvb, 51, 5, ENC_LITTLE_ENDIAN);
+            proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_svc_req_code,
+                    tvb, 42, 1, ENC_LITTLE_ENDIAN);
+            proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_svc_req_data,
+                    tvb, 43, 13, ENC_LITTLE_ENDIAN);
+        } else if (mbox_type == 0xD1) {  // Error Nack
+            proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_packet_num,
+                    tvb, 40, 1, ENC_LITTLE_ENDIAN);
+            proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_total_packets,
+                    tvb, 41, 1, ENC_LITTLE_ENDIAN);
 
-        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_text_buffer,
-                tvb, SRTP_MAILBOX_MESSAGE_LENGTH, next_message_len,
-                ENC_LITTLE_ENDIAN);
-    } else if (mbox_type == 0x94) {  // Completion ACK with Text Buffer
-        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_response_data_len,
-                tvb, 42, 2, ENC_LITTLE_ENDIAN);
-        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_packet_num,
-                tvb, 48, 1, ENC_LITTLE_ENDIAN);
-        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_total_packets,
-                tvb, 49, 1, ENC_LITTLE_ENDIAN);
-        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_control_program_num,
-                tvb, 50, 1, ENC_LITTLE_ENDIAN);
-        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_privilege_level,
-                tvb, 51, 1, ENC_LITTLE_ENDIAN);
-        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_last_sweep,
-                tvb, 52, 2, ENC_LITTLE_ENDIAN);
-        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_plc_status_word,
-                tvb, 54, 2, ENC_LITTLE_ENDIAN);
+            proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_major_error_status,
+                    tvb, 42, 1, ENC_LITTLE_ENDIAN);
+            proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_minor_error_status,
+                    tvb, 43, 1, ENC_LITTLE_ENDIAN);
+        } else if (mbox_type == 0xD4) {  // Completion ACK
+            proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_packet_num,
+                    tvb, 40, 1, ENC_LITTLE_ENDIAN);
+            proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_total_packets,
+                    tvb, 41, 1, ENC_LITTLE_ENDIAN);
 
-        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_text_buffer,
-                tvb, SRTP_MAILBOX_MESSAGE_LENGTH, next_message_len,
-                ENC_LITTLE_ENDIAN);
-    } else if (mbox_type == 0xC0) {  // Initial Request
-        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_packet_num,
-                tvb, 40, 1, ENC_LITTLE_ENDIAN);
-        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_total_packets,
-                tvb, 41, 1, ENC_LITTLE_ENDIAN);
-
-        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_svc_req_code,
-                tvb, 42, 1, ENC_LITTLE_ENDIAN);
-        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_svc_req_data,
-                tvb, 43, 13, ENC_LITTLE_ENDIAN);
-    } else if (mbox_type == 0xD1) {  // Error Nack
-        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_packet_num,
-                tvb, 40, 1, ENC_LITTLE_ENDIAN);
-        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_total_packets,
-                tvb, 41, 1, ENC_LITTLE_ENDIAN);
-
-        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_major_error_status,
-                tvb, 42, 1, ENC_LITTLE_ENDIAN);
-        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_minor_error_status,
-                tvb, 43, 1, ENC_LITTLE_ENDIAN);
-    } else if (mbox_type == 0xD4) {  // Completion ACK
-        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_packet_num,
-                tvb, 40, 1, ENC_LITTLE_ENDIAN);
-        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_total_packets,
-                tvb, 41, 1, ENC_LITTLE_ENDIAN);
-
-        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_status_code,
-                tvb, 42, 1, ENC_LITTLE_ENDIAN);
-        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_status_data,
-                tvb, 43, 1, ENC_LITTLE_ENDIAN);
-        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_response_data,
-                tvb, 44, 6, ENC_LITTLE_ENDIAN);
-        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_control_program_num,
-                tvb, 50, 1, ENC_LITTLE_ENDIAN);
-        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_privilege_level,
-                tvb, 51, 1, ENC_LITTLE_ENDIAN);
-        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_last_sweep,
-                tvb, 52, 2, ENC_LITTLE_ENDIAN);
-        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_plc_status_word,
-                tvb, 54, 2, ENC_LITTLE_ENDIAN);
-    } else {
-        expert_add_info(pinfo, mbox_type_ti, &ei_ge_srtp_mbox_type_unknown);
+            proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_status_code,
+                    tvb, 42, 1, ENC_LITTLE_ENDIAN);
+            proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_status_data,
+                    tvb, 43, 1, ENC_LITTLE_ENDIAN);
+            proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_response_data,
+                    tvb, 44, 6, ENC_LITTLE_ENDIAN);
+            proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_control_program_num,
+                    tvb, 50, 1, ENC_LITTLE_ENDIAN);
+            proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_privilege_level,
+                    tvb, 51, 1, ENC_LITTLE_ENDIAN);
+            proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_last_sweep,
+                    tvb, 52, 2, ENC_LITTLE_ENDIAN);
+            proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_plc_status_word,
+                    tvb, 54, 2, ENC_LITTLE_ENDIAN);
+        }
     }
 
     return tvb_captured_length(tvb);
@@ -501,8 +496,6 @@ dissect_ge_srtp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
 void
 proto_register_ge_srtp(void)
 {
-    expert_module_t *expert_ge_srtp;
-
     static hf_register_info hf[] = {
         { &hf_ge_srtp_reqframe,
           { "Request Frame", "ge_srtp.reqframe",
@@ -668,20 +661,10 @@ proto_register_ge_srtp(void)
         &ett_ge_srtp
     };
 
-    static ei_register_info ei[] = {
-        { &ei_ge_srtp_mbox_type_unknown,
-          { "ge_srtp.mbox_type_unknown", PI_UNDECODED, PI_WARN,
-            "Mailbox message type code was not recognized", EXPFILL }
-        }
-    };
-
     proto_ge_srtp = proto_register_protocol("GE SRTP", "GE SRTP", "ge_srtp");
 
     proto_register_field_array(proto_ge_srtp, hf, array_length(hf));
     proto_register_subtree_array(ett, array_length(ett));
-
-    expert_ge_srtp = expert_register_protocol(proto_ge_srtp);
-    expert_register_field_array(expert_ge_srtp, ei, array_length(ei));
 
     register_init_routine(ge_srtp_init_protocol);
     register_cleanup_routine(ge_srtp_cleanup_protocol);
