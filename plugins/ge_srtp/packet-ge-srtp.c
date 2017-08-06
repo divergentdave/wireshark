@@ -48,6 +48,8 @@ void proto_reg_handoff_ge_srtp(void);
 
 static int proto_ge_srtp = -1;
 
+static int hf_ge_srtp_reqframe = -1;
+static int hf_ge_srtp_respframe = -1;
 static int hf_ge_srtp_type = -1;
 static int hf_ge_srtp_seq_num = -1;
 static int hf_ge_srtp_next_msg_len = -1;
@@ -324,8 +326,48 @@ dissect_ge_srtp_message(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
         }
     }
 
+    col_clear(pinfo->cinfo, COL_INFO);
+    if (mbox_type == 0xC0 || mbox_type == 0x80) {
+        guint8 svc_req_code = tvb_get_guint8(tvb, 42);
+        col_add_fstr(pinfo->cinfo, COL_INFO, "%s (%s)",
+                val_to_str(mbox_type, ge_srtp_mbox_type, "unused"),
+                val_to_str(svc_req_code, ge_srtp_svc_req_type,
+                    "Service request 0x%02x"));
+    } else if (request_val) {
+        col_add_fstr(pinfo->cinfo, COL_INFO, "%s (%s)",
+                val_to_str(mbox_type, ge_srtp_mbox_type, "unused"),
+                val_to_str(request_val->svc_req_type, ge_srtp_svc_req_type,
+                    "Service request 0x%02x"));
+    } else {
+        col_add_fstr(pinfo->cinfo, COL_INFO, "%s",
+                val_to_str(mbox_type, ge_srtp_mbox_type, "Unknown (0x%02x)"));
+    }
+
     ti = proto_tree_add_item(tree, proto_ge_srtp, tvb, 0, -1, ENC_NA);
     ge_srtp_tree = proto_item_add_subtree(ti, ett_ge_srtp);
+
+    if (mbox_type == 0xC0 || mbox_type == 0x80) {
+        if (request_val) {
+            if (request_val->resp_num) {
+                proto_tree_add_uint_format(ge_srtp_tree, hf_ge_srtp_respframe,
+                        tvb, 0, 0, request_val->resp_num,
+                        "The reply to this request is in frame %u",
+                        request_val->resp_num);
+            }
+        }
+    } else if (mbox_type == 0xD4 || mbox_type == 0x94 ||
+            mbox_type == 0xD1) {
+        if (request_val) {
+            proto_tree_add_uint(ge_srtp_tree, hf_ge_srtp_mbox_svc_req_code,
+                    tvb, 0, 0, request_val->svc_req_type);
+            if (request_val->req_num) {
+                proto_tree_add_uint_format(ge_srtp_tree, hf_ge_srtp_reqframe,
+                        tvb, 0, 0, request_val->req_num,
+                        "This is a reply to a request in frame %u",
+                        request_val->req_num);
+            }
+        }
+    }
 
     proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_type,
             tvb, 0, 2, ENC_LITTLE_ENDIAN);
@@ -359,25 +401,6 @@ dissect_ge_srtp_message(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
     proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_dst_id,
             tvb, 36, 4, ENC_LITTLE_ENDIAN);
 
-    mbox_type = tvb_get_guint8(tvb, 31);
-    col_clear(pinfo->cinfo, COL_INFO);
-    if (mbox_type == 0xC0 || mbox_type == 0x80) {
-        guint8 svc_req_code = tvb_get_guint8(tvb, 42);
-        col_add_fstr(pinfo->cinfo, COL_INFO, "%s (%s)",
-                val_to_str(mbox_type, ge_srtp_mbox_type, "unused"),
-                val_to_str(svc_req_code, ge_srtp_svc_req_type,
-                    "Service request 0x%02x"));
-    } else if (request_val) {
-        col_add_fstr(pinfo->cinfo, COL_INFO, "%s (%s)",
-                val_to_str(mbox_type, ge_srtp_mbox_type, "unused"),
-                val_to_str(request_val->svc_req_type, ge_srtp_svc_req_type,
-                    "Service request 0x%02x"));
-        proto_tree_add_uint(ge_srtp_tree, hf_ge_srtp_mbox_svc_req_code,
-                tvb, 0, 0, request_val->svc_req_type);
-    } else {
-        col_add_fstr(pinfo->cinfo, COL_INFO, "%s",
-                val_to_str(mbox_type, ge_srtp_mbox_type, "Unknown (0x%02x)"));
-    }
     if (mbox_type == 0x80) {  // Initial Request with Text Buffer
         proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_svc_req_code,
                 tvb, 42, 1, ENC_LITTLE_ENDIAN);
@@ -481,6 +504,14 @@ proto_register_ge_srtp(void)
     expert_module_t *expert_ge_srtp;
 
     static hf_register_info hf[] = {
+        { &hf_ge_srtp_reqframe,
+          { "Request Frame", "ge_srtp.reqframe",
+            FT_FRAMENUM, BASE_NONE, NULL, 0, NULL, HFILL }
+        },
+        { &hf_ge_srtp_respframe,
+          { "Response Frame", "ge_srtp.respframe",
+            FT_FRAMENUM, BASE_NONE, NULL, 0, NULL, HFILL }
+        },
         { &hf_ge_srtp_type,
           { "SRTP Packet Type", "ge_srtp.type",
             FT_UINT16, BASE_HEX,
