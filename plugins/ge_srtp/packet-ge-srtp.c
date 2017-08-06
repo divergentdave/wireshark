@@ -474,7 +474,7 @@ dissect_ge_srtp_message(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
         }
     }
 
-    return tvb_captured_length(tvb);
+    return tvb_reported_length(tvb);
 }
 
 static guint
@@ -490,7 +490,7 @@ dissect_ge_srtp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
 {
     tcp_dissect_pdus(tvb, pinfo, tree, TRUE, FRAME_HEADER_LEN,
             get_ge_srtp_message_len, dissect_ge_srtp_message, data);
-    return tvb_captured_length(tvb);
+    return tvb_reported_length(tvb);
 }
 
 void
