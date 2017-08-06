@@ -54,7 +54,7 @@ static int hf_ge_srtp_next_msg_len = -1;
 static int hf_ge_srtp_mbox_todo = -1;
 
 /* Mailbox messages */
-static int hf_ge_srtp_mbox_timestamp = -1; // TODO: BCD decode time
+static int hf_ge_srtp_mbox_timestamp = -1;
 static int hf_ge_srtp_mbox_seq_num = -1;
 static int hf_ge_srtp_mbox_type = -1;
 static int hf_ge_srtp_mbox_src_id = -1;
