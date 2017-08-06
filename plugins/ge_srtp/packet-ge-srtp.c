@@ -35,6 +35,7 @@
 #include <epan/expert.h>
 #include <epan/wmem/wmem.h>
 #include <epan/expert.h>
+#include <epan/conversation.h>
 
 #include <epan/prefs.h>
 
@@ -204,6 +205,20 @@ static const value_string ge_srtp_svc_req_type[] = {
     { 0, NULL }
 };
 
+struct ge_srtp_request_key {
+    guint32 conversation;
+    guint16 srtp_seq_num;
+    guint8 mbox_seq_num;
+};
+
+struct ge_srtp_request_val {
+    guint req_num;
+    guint resp_num;
+    guint8 svc_req_type;
+};
+
+static GHashTable *ge_srtp_request_hash = NULL;
+
 static int
 bcd_decode_byte(guint8 byte)
 {
@@ -215,6 +230,46 @@ bcd_decode_byte(guint8 byte)
     return high_nibble * 10 + low_nibble;
 }
 
+// Equal function for request hash table
+static gint
+ge_srtp_equal(gconstpointer v, gconstpointer w)
+{
+    const struct ge_srtp_request_key *v1 = (const struct ge_srtp_request_key *)v;
+    const struct ge_srtp_request_key *v2 = (const struct ge_srtp_request_key *)w;
+
+    if (v1->conversation == v2->conversation &&
+        v1->srtp_seq_num == v2->srtp_seq_num &&
+        v1->mbox_seq_num == v2->mbox_seq_num) {
+        return 1;
+    }
+
+    return 0;
+}
+
+// Hash function for request hash table
+static guint
+ge_srtp_hash(gconstpointer v)
+{
+    const struct ge_srtp_request_key *key = (const struct ge_srtp_request_key *)v;
+    guint val;
+
+    val = key->conversation + 251 * key->srtp_seq_num + 32749 * key->mbox_seq_num;
+
+    return val;
+}
+
+static void
+ge_srtp_init_protocol(void)
+{
+    ge_srtp_request_hash = g_hash_table_new(ge_srtp_hash, ge_srtp_equal);
+}
+
+static void
+ge_srtp_cleanup_protocol(void)
+{
+    g_hash_table_destroy(ge_srtp_request_hash);
+}
+
 #define FRAME_HEADER_LEN 18
 
 static int
@@ -224,12 +279,48 @@ dissect_ge_srtp_message(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
     proto_item *ti;
     proto_item *mbox_type_ti;
     proto_tree *ge_srtp_tree;
+    conversation_t *conversation;
+    struct ge_srtp_request_key request_key, *new_request_key;
+    struct ge_srtp_request_val *request_val = NULL;
 
     guint8 mbox_type;
     int timestamp_hr, timestamp_min, timestamp_sec;
     guint next_message_len;
 
     col_set_str(pinfo->cinfo, COL_PROTOCOL, "GE SRTP");
+
+    conversation = find_or_create_conversation(pinfo);
+
+    request_key.conversation = conversation->conv_index;
+    request_key.srtp_seq_num = tvb_get_guint16(tvb, 2, ENC_LITTLE_ENDIAN);
+    request_key.mbox_seq_num = tvb_get_guint8(tvb, 30);
+
+    request_val = (struct ge_srtp_request_val *)g_hash_table_lookup(
+            ge_srtp_request_hash, &request_key);
+
+    // Only allocate a new hash element when dissecting a request
+    // (0xC0 is Initial Request, 0x80 is Initial Request with Text Buffer)
+    mbox_type = tvb_get_guint8(tvb, 31);
+    if (!request_val && (mbox_type == 0x80 || mbox_type == 0xC0)) {
+        new_request_key = wmem_new(wmem_file_scope(),
+                struct ge_srtp_request_key);
+        *new_request_key = request_key;
+
+        request_val = wmem_new(wmem_file_scope(),
+                struct ge_srtp_request_val);
+        request_val->req_num = pinfo->num;
+        request_val->resp_num = 0;
+        request_val->svc_req_type = tvb_get_guint8(tvb, 42);
+
+        g_hash_table_insert(ge_srtp_request_hash, new_request_key,
+                request_val);
+    }
+    // (0xD4 is Completion ACK, 0x94 is Completion ACK with Text Buffer,
+    // and 0xD1 is Error NACK)
+    if (request_val && (mbox_type == 0xD4 || mbox_type == 0x94 ||
+                mbox_type == 0xD1)) {
+        request_val->resp_num = pinfo->num;
+    }
 
     ti = proto_tree_add_item(tree, proto_ge_srtp, tvb, 0, -1, ENC_NA);
     ge_srtp_tree = proto_item_add_subtree(ti, ett_ge_srtp);
@@ -273,6 +364,11 @@ dissect_ge_srtp_message(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
         col_add_fstr(pinfo->cinfo, COL_INFO, "%s (%s)",
                 val_to_str(mbox_type, ge_srtp_mbox_type, "unused"),
                 val_to_str(svc_req_code, ge_srtp_svc_req_type,
+                    "Service request 0x%02x"));
+    } else if (request_val) {
+        col_add_fstr(pinfo->cinfo, COL_INFO, "%s (%s)",
+                val_to_str(mbox_type, ge_srtp_mbox_type, "unused"),
+                val_to_str(request_val->svc_req_type, ge_srtp_svc_req_type,
                     "Service request 0x%02x"));
     } else {
         col_add_fstr(pinfo->cinfo, COL_INFO, "%s",
@@ -551,6 +647,9 @@ proto_register_ge_srtp(void)
 
     expert_ge_srtp = expert_register_protocol(proto_ge_srtp);
     expert_register_field_array(expert_ge_srtp, ei, array_length(ei));
+
+    register_init_routine(ge_srtp_init_protocol);
+    register_cleanup_routine(ge_srtp_cleanup_protocol);
 
     prefs_register_protocol(proto_ge_srtp, proto_reg_handoff_ge_srtp);
 }
