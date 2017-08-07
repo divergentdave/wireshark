@@ -322,6 +322,13 @@ static const value_string ge_srtp_minor_error_status[] = {
     { 0xFD, "Unable to perform auto configuration" },
     { 0xFE, "No privilege for attempted operation" },
     { 0xFF, "Service request has been aborted" },
+    { 0, NULL },
+};
+
+static const value_string ge_srtp_control_program_num[] = {
+    { -1, "SNP master is not logged into a control program" },
+    { 0, "SNP master is logged into control program task 0" },
+    { 0, NULL },
 };
 
 static const true_false_string tfs_oversweep = {
@@ -818,8 +825,8 @@ proto_register_ge_srtp(void)
         },
         { &hf_ge_srtp_mbox_control_program_num,
           { "Control program number", "ge_srtp.control_program_num",
-            FT_UINT8, BASE_DEC,
-            NULL, 0,
+            FT_INT8, BASE_DEC,
+            VALS(ge_srtp_control_program_num), 0,
             NULL, HFILL }
         },
         { &hf_ge_srtp_mbox_privilege_level,
