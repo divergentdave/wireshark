@@ -559,7 +559,18 @@ dissect_ge_srtp_message(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
         proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_dst_id,
                 tvb, 36, 4, ENC_LITTLE_ENDIAN);
 
-        if (mbox_type == 0x80) {  // Initial Request with Text Buffer
+        if (mbox_type == 0xC0) {  // Initial Request
+            proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_packet_num,
+                    tvb, 40, 1, ENC_LITTLE_ENDIAN);
+            proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_total_packets,
+                    tvb, 41, 1, ENC_LITTLE_ENDIAN);
+
+            proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_svc_req_code,
+                    tvb, 42, 1, ENC_LITTLE_ENDIAN);
+            proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_svc_req_data,
+                    tvb, 43, 13, ENC_LITTLE_ENDIAN);
+            tvb_svc_req_data = tvb_new_subset_length_caplen(tvb, 43, 13, 13);
+        } else if (mbox_type == 0x80) {  // Initial Request with Text Buffer
             proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_svc_req_code,
                     tvb, 42, 1, ENC_LITTLE_ENDIAN);
             proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_svc_req_data_len,
@@ -578,6 +589,52 @@ dissect_ge_srtp_message(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
             tvb_text_buffer = tvb_new_subset_length_caplen(tvb,
                     SRTP_MAILBOX_MESSAGE_LENGTH, next_message_len,
                     next_message_len);
+        } else if (mbox_type == 0xD4) {  // Completion ACK
+            proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_packet_num,
+                    tvb, 40, 1, ENC_LITTLE_ENDIAN);
+            proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_total_packets,
+                    tvb, 41, 1, ENC_LITTLE_ENDIAN);
+
+            proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_status_code,
+                    tvb, 42, 1, ENC_LITTLE_ENDIAN);
+            proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_status_data,
+                    tvb, 43, 1, ENC_LITTLE_ENDIAN);
+            proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_response_data,
+                    tvb, 44, 6, ENC_LITTLE_ENDIAN);
+            tvb_resp_data = tvb_new_subset_length_caplen(tvb, 44, 6, 6);
+            piggyback_item = proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_piggyback_status,
+                    tvb, 50, 6, ENC_NA);
+            piggyback_tree = proto_item_add_subtree(piggyback_item, ett_piggyback);
+            proto_tree_add_item(piggyback_tree, hf_ge_srtp_mbox_control_program_num,
+                    tvb, 50, 1, ENC_LITTLE_ENDIAN);
+            proto_tree_add_item(piggyback_tree, hf_ge_srtp_mbox_privilege_level,
+                    tvb, 51, 1, ENC_LITTLE_ENDIAN);
+            proto_tree_add_item(piggyback_tree, hf_ge_srtp_mbox_last_sweep,
+                    tvb, 52, 2, ENC_LITTLE_ENDIAN);
+            proto_tree_add_item(piggyback_tree, hf_ge_srtp_mbox_plc_status_word,
+                    tvb, 54, 2, ENC_LITTLE_ENDIAN);
+            proto_tree_add_item(piggyback_tree, hf_ge_srtp_mbox_plc_status_word_oversweep,
+                    tvb, 54, 2, ENC_LITTLE_ENDIAN);
+            proto_tree_add_item(piggyback_tree, hf_ge_srtp_mbox_plc_status_word_constant_sweep_mode,
+                    tvb, 54, 2, ENC_LITTLE_ENDIAN);
+            proto_tree_add_item(piggyback_tree, hf_ge_srtp_mbox_plc_status_word_new_plc_fault,
+                    tvb, 54, 2, ENC_LITTLE_ENDIAN);
+            proto_tree_add_item(piggyback_tree, hf_ge_srtp_mbox_plc_status_word_new_io_fault,
+                    tvb, 54, 2, ENC_LITTLE_ENDIAN);
+            proto_tree_add_item(piggyback_tree, hf_ge_srtp_mbox_plc_status_word_plc_fault,
+                    tvb, 54, 2, ENC_LITTLE_ENDIAN);
+            proto_tree_add_item(piggyback_tree, hf_ge_srtp_mbox_plc_status_word_io_fault,
+                    tvb, 54, 2, ENC_LITTLE_ENDIAN);
+            proto_tree_add_item(piggyback_tree, hf_ge_srtp_mbox_plc_status_word_programmer_attached,
+                    tvb, 54, 2, ENC_LITTLE_ENDIAN);
+            proto_tree_add_item(piggyback_tree, hf_ge_srtp_mbox_plc_status_word_outputs_switch,
+                    tvb, 54, 2, ENC_LITTLE_ENDIAN);
+            proto_tree_add_item(piggyback_tree, hf_ge_srtp_mbox_plc_status_word_run_switch,
+                    tvb, 54, 2, ENC_LITTLE_ENDIAN);
+            proto_tree_add_item(piggyback_tree, hf_ge_srtp_mbox_plc_status_word_oem_protection,
+                    tvb, 54, 2, ENC_LITTLE_ENDIAN);
+            proto_tree_add_item(piggyback_tree, hf_ge_srtp_mbox_plc_status_word_plc_state,
+                    tvb, 54, 2, ENC_LITTLE_ENDIAN);
         } else if (mbox_type == 0x94) {  // Completion ACK with Text Buffer
             proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_response_data_len,
                     tvb, 42, 2, ENC_LITTLE_ENDIAN);
@@ -625,17 +682,6 @@ dissect_ge_srtp_message(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
             tvb_text_buffer = tvb_new_subset_length_caplen(tvb,
                     SRTP_MAILBOX_MESSAGE_LENGTH, next_message_len,
                     next_message_len);
-        } else if (mbox_type == 0xC0) {  // Initial Request
-            proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_packet_num,
-                    tvb, 40, 1, ENC_LITTLE_ENDIAN);
-            proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_total_packets,
-                    tvb, 41, 1, ENC_LITTLE_ENDIAN);
-
-            proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_svc_req_code,
-                    tvb, 42, 1, ENC_LITTLE_ENDIAN);
-            proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_svc_req_data,
-                    tvb, 43, 13, ENC_LITTLE_ENDIAN);
-            tvb_svc_req_data = tvb_new_subset_length_caplen(tvb, 43, 13, 13);
         } else if (mbox_type == 0xD1) {  // Error Nack
             proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_packet_num,
                     tvb, 40, 1, ENC_LITTLE_ENDIAN);
@@ -646,52 +692,6 @@ dissect_ge_srtp_message(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
                     tvb, 42, 1, ENC_LITTLE_ENDIAN);
             proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_minor_error_status,
                     tvb, 43, 1, ENC_LITTLE_ENDIAN);
-        } else if (mbox_type == 0xD4) {  // Completion ACK
-            proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_packet_num,
-                    tvb, 40, 1, ENC_LITTLE_ENDIAN);
-            proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_total_packets,
-                    tvb, 41, 1, ENC_LITTLE_ENDIAN);
-
-            proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_status_code,
-                    tvb, 42, 1, ENC_LITTLE_ENDIAN);
-            proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_status_data,
-                    tvb, 43, 1, ENC_LITTLE_ENDIAN);
-            proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_response_data,
-                    tvb, 44, 6, ENC_LITTLE_ENDIAN);
-            tvb_resp_data = tvb_new_subset_length_caplen(tvb, 44, 6, 6);
-            piggyback_item = proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_piggyback_status,
-                    tvb, 50, 6, ENC_NA);
-            piggyback_tree = proto_item_add_subtree(piggyback_item, ett_piggyback);
-            proto_tree_add_item(piggyback_tree, hf_ge_srtp_mbox_control_program_num,
-                    tvb, 50, 1, ENC_LITTLE_ENDIAN);
-            proto_tree_add_item(piggyback_tree, hf_ge_srtp_mbox_privilege_level,
-                    tvb, 51, 1, ENC_LITTLE_ENDIAN);
-            proto_tree_add_item(piggyback_tree, hf_ge_srtp_mbox_last_sweep,
-                    tvb, 52, 2, ENC_LITTLE_ENDIAN);
-            proto_tree_add_item(piggyback_tree, hf_ge_srtp_mbox_plc_status_word,
-                    tvb, 54, 2, ENC_LITTLE_ENDIAN);
-            proto_tree_add_item(piggyback_tree, hf_ge_srtp_mbox_plc_status_word_oversweep,
-                    tvb, 54, 2, ENC_LITTLE_ENDIAN);
-            proto_tree_add_item(piggyback_tree, hf_ge_srtp_mbox_plc_status_word_constant_sweep_mode,
-                    tvb, 54, 2, ENC_LITTLE_ENDIAN);
-            proto_tree_add_item(piggyback_tree, hf_ge_srtp_mbox_plc_status_word_new_plc_fault,
-                    tvb, 54, 2, ENC_LITTLE_ENDIAN);
-            proto_tree_add_item(piggyback_tree, hf_ge_srtp_mbox_plc_status_word_new_io_fault,
-                    tvb, 54, 2, ENC_LITTLE_ENDIAN);
-            proto_tree_add_item(piggyback_tree, hf_ge_srtp_mbox_plc_status_word_plc_fault,
-                    tvb, 54, 2, ENC_LITTLE_ENDIAN);
-            proto_tree_add_item(piggyback_tree, hf_ge_srtp_mbox_plc_status_word_io_fault,
-                    tvb, 54, 2, ENC_LITTLE_ENDIAN);
-            proto_tree_add_item(piggyback_tree, hf_ge_srtp_mbox_plc_status_word_programmer_attached,
-                    tvb, 54, 2, ENC_LITTLE_ENDIAN);
-            proto_tree_add_item(piggyback_tree, hf_ge_srtp_mbox_plc_status_word_outputs_switch,
-                    tvb, 54, 2, ENC_LITTLE_ENDIAN);
-            proto_tree_add_item(piggyback_tree, hf_ge_srtp_mbox_plc_status_word_run_switch,
-                    tvb, 54, 2, ENC_LITTLE_ENDIAN);
-            proto_tree_add_item(piggyback_tree, hf_ge_srtp_mbox_plc_status_word_oem_protection,
-                    tvb, 54, 2, ENC_LITTLE_ENDIAN);
-            proto_tree_add_item(piggyback_tree, hf_ge_srtp_mbox_plc_status_word_plc_state,
-                    tvb, 54, 2, ENC_LITTLE_ENDIAN);
         }
     }
 
