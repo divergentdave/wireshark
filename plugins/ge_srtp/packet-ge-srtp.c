@@ -76,7 +76,18 @@ static int hf_ge_srtp_mbox_response_data = -1;
 static int hf_ge_srtp_mbox_control_program_num = -1; // TODO: subtree for piggyback
 static int hf_ge_srtp_mbox_privilege_level = -1;
 static int hf_ge_srtp_mbox_last_sweep = -1;
-static int hf_ge_srtp_mbox_plc_status_word = -1; // TODO: bitfield
+static int hf_ge_srtp_mbox_plc_status_word = -1;
+static int hf_ge_srtp_mbox_plc_status_word_oversweep = -1;
+static int hf_ge_srtp_mbox_plc_status_word_constant_sweep_mode = -1;
+static int hf_ge_srtp_mbox_plc_status_word_new_plc_fault = -1;
+static int hf_ge_srtp_mbox_plc_status_word_new_io_fault = -1;
+static int hf_ge_srtp_mbox_plc_status_word_plc_fault = -1;
+static int hf_ge_srtp_mbox_plc_status_word_io_fault = -1;
+static int hf_ge_srtp_mbox_plc_status_word_programmer_attached = -1;
+static int hf_ge_srtp_mbox_plc_status_word_outputs_switch = -1;
+static int hf_ge_srtp_mbox_plc_status_word_run_switch = -1;
+static int hf_ge_srtp_mbox_plc_status_word_oem_protection = -1;
+static int hf_ge_srtp_mbox_plc_status_word_plc_state = -1;
 
 static int hf_ge_srtp_mbox_response_data_len = -1;
 
@@ -201,6 +212,49 @@ static const value_string ge_srtp_svc_req_type[] = {
     { 0x60, "Clear Selected Fault" },
     { 0x61, "Return PLC Features Supported" },
     { 0, NULL }
+};
+
+static const value_string ge_srtp_plc_state[] = {
+    { 0, "Run I/O enabled" },
+    { 1, "Run I/O disabled" },
+    { 2, "Stop I/O disabled" },
+    { 3, "CPU stop faulted" },
+    { 4, "CPU halted" },
+    { 5, "CPU suspended" },
+    { 6, "Stop I/O enabled" },
+    { 0, NULL }
+};
+
+static const true_false_string tfs_oversweep = {
+    "The constant sweep value has been exceeded",
+    "Sweep time is OK"
+}, tfs_constant_sweep_mode = {
+    "Constant sweep mode is active",
+    "Constant sweep mode is not active"
+}, tfs_new_plc_fault = {
+    "The PLC fault table has changed since it was last read by this device",
+    "The PLC fault table has not changed since it was last read by this device"
+}, tfs_new_io_fault = {
+    "The I/O fault table has changed since it was last read by this device",
+    "The I/O fault table has not changed since it was last read by this device"
+}, tfs_plc_fault = {
+    "One or more PLC faults are present in the PLC fault table",
+    "The PLC fault table is empty"
+}, tfs_io_fault = {
+    "One or more I/O faults are present in the I/O fault table",
+    "The I/O fault table is empty"
+}, tfs_programmer_attached = {
+    "Programmer is attached",
+    "Programmer is not attached"
+}, tfs_outputs_switch = {
+    "Outputs disabled",
+    "Outputs enabled"
+}, tfs_run_switch = {
+    "Run",
+    "Stop"
+}, tfs_oem_protection = {
+    "OEM protection is enabled",
+    "There is no OEM protection"
 };
 
 struct ge_srtp_request_key {
@@ -427,6 +481,28 @@ dissect_ge_srtp_message(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
                     tvb, 52, 2, ENC_LITTLE_ENDIAN);
             proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_plc_status_word,
                     tvb, 54, 2, ENC_LITTLE_ENDIAN);
+            proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_plc_status_word_oversweep,
+                    tvb, 54, 2, ENC_LITTLE_ENDIAN);
+            proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_plc_status_word_constant_sweep_mode,
+                    tvb, 54, 2, ENC_LITTLE_ENDIAN);
+            proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_plc_status_word_new_plc_fault,
+                    tvb, 54, 2, ENC_LITTLE_ENDIAN);
+            proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_plc_status_word_new_io_fault,
+                    tvb, 54, 2, ENC_LITTLE_ENDIAN);
+            proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_plc_status_word_plc_fault,
+                    tvb, 54, 2, ENC_LITTLE_ENDIAN);
+            proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_plc_status_word_io_fault,
+                    tvb, 54, 2, ENC_LITTLE_ENDIAN);
+            proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_plc_status_word_programmer_attached,
+                    tvb, 54, 2, ENC_LITTLE_ENDIAN);
+            proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_plc_status_word_outputs_switch,
+                    tvb, 54, 2, ENC_LITTLE_ENDIAN);
+            proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_plc_status_word_run_switch,
+                    tvb, 54, 2, ENC_LITTLE_ENDIAN);
+            proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_plc_status_word_oem_protection,
+                    tvb, 54, 2, ENC_LITTLE_ENDIAN);
+            proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_plc_status_word_plc_state,
+                    tvb, 54, 2, ENC_LITTLE_ENDIAN);
 
             proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_text_buffer,
                     tvb, SRTP_MAILBOX_MESSAGE_LENGTH, next_message_len,
@@ -509,25 +585,25 @@ proto_register_ge_srtp(void)
           { "SRTP Packet Type", "ge_srtp.type",
             FT_UINT16, BASE_HEX,
             NULL, 0,
-            "SRTP Packet Type", HFILL }
+            NULL, HFILL }
         },
         { &hf_ge_srtp_seq_num,
           { "SRTP Sequence Number", "ge_srtp.seq_num",
             FT_UINT16, BASE_HEX,
             NULL, 0,
-            "SRTP Sequence Number", HFILL }
+            NULL, HFILL }
         },
         { &hf_ge_srtp_next_msg_len,
           { "Next Message Length", "ge_srtp.next_msg_len",
             FT_UINT16, BASE_DEC,
             NULL, 0,
-            "Next Message Length", HFILL }
+            NULL, HFILL }
         },
         { &hf_ge_srtp_mbox_todo,
           { "TODO", "ge_srtp.todo",
             FT_NONE, BASE_NONE,
             NULL, 0,
-            "TODO", HFILL }
+            NULL, HFILL }
         },
         { &hf_ge_srtp_mbox_timestamp,
           { "Timestamp", "ge_srtp.timestamp",
@@ -551,73 +627,73 @@ proto_register_ge_srtp(void)
           { "Mailbox Source ID", "ge_srtp.mbox_src_id",
             FT_UINT32, BASE_HEX,
             NULL, 0,
-            "Mailbox source ID", HFILL }
+            NULL, HFILL }
         },
         { &hf_ge_srtp_mbox_dst_id,
           { "Mailbox Destination ID", "ge_srtp.mbox_dst_id",
             FT_UINT32, BASE_HEX,
             NULL, 0,
-            "Mailbox destination ID", HFILL }
+            NULL, HFILL }
         },
         { &hf_ge_srtp_mbox_packet_num,
           { "Packet number", "ge_srtp.packet_num",
             FT_UINT8, BASE_DEC,
             NULL, 0,
-            "Packet number", HFILL }
+            NULL, HFILL }
         },
         { &hf_ge_srtp_mbox_total_packets,
           { "Total packets", "ge_srtp.total_packets",
             FT_UINT8, BASE_DEC,
             NULL, 0,
-            "Total packets", HFILL }
+            NULL, HFILL }
         },
         { &hf_ge_srtp_mbox_svc_req_code,
           { "Service request code", "ge_srtp.svc_req_code",
             FT_UINT8, BASE_HEX,
             VALS(ge_srtp_svc_req_type), 0,
-            "Service request code", HFILL }
+            NULL, HFILL }
         },
         { &hf_ge_srtp_mbox_svc_req_data,
           { "Service request data", "ge_srtp.svc_req_data",
             FT_BYTES, SEP_SPACE,
             NULL, 0,
-            "Service request data", HFILL }
+            NULL, HFILL }
         },
         { &hf_ge_srtp_mbox_svc_req_data_len,
           { "Service request data length", "ge_srtp.svc_req_data_len",
             FT_UINT16, BASE_DEC,
             NULL, 0,
-            "Service request data length", HFILL }
+            NULL, HFILL }
         },
         { &hf_ge_srtp_mbox_status_code,
           { "Status code", "ge_srtp.status_code",
             FT_UINT8, BASE_HEX,
             NULL, 0,
-            "Status code", HFILL }
+            NULL, HFILL }
         },
         { &hf_ge_srtp_mbox_status_data,
           { "Status data", "ge_srtp.status_data",
             FT_BYTES, SEP_SPACE,
             NULL, 0,
-            "Status data", HFILL }
+            NULL, HFILL }
         },
         { &hf_ge_srtp_mbox_response_data,
           { "Response data", "ge_srtp.response_data",
             FT_BYTES, SEP_SPACE,
             NULL, 0,
-            "Response data", HFILL }
+            NULL, HFILL }
         },
         { &hf_ge_srtp_mbox_control_program_num,
           { "Control program number", "ge_srtp.control_program_num",
             FT_UINT8, BASE_DEC,
             NULL, 0,
-            "Control program number", HFILL }
+            NULL, HFILL }
         },
         { &hf_ge_srtp_mbox_privilege_level,
           { "Privilege level", "ge_srtp.privilege_level",
             FT_UINT8, BASE_DEC,
             NULL, 0,
-            "Privilege level", HFILL }
+            NULL, HFILL }
         },
         { &hf_ge_srtp_mbox_last_sweep,
           { "Last sweep time", "ge_srtp.last_sweep",
@@ -629,31 +705,97 @@ proto_register_ge_srtp(void)
           { "PLC status word", "ge_srtp.plc_status_word",
             FT_UINT16, BASE_HEX,
             NULL, 0,
-            "PLC status word", HFILL }
+            NULL, HFILL }
+        },
+        { &hf_ge_srtp_mbox_plc_status_word_oversweep,
+          { "Oversweep flag", "ge_srtp.plc_status_word.oversweep",
+            FT_BOOLEAN, 16,
+            TFS(&tfs_oversweep), 0x0001,
+            NULL, HFILL }
+        },
+        { &hf_ge_srtp_mbox_plc_status_word_constant_sweep_mode,
+          { "Constant sweep mode", "ge_srtp.plc_status_word.constant_sweep_mode",
+            FT_BOOLEAN, 16,
+            TFS(&tfs_constant_sweep_mode), 0x0002,
+            NULL, HFILL }
+        },
+        { &hf_ge_srtp_mbox_plc_status_word_new_plc_fault,
+          { "New PLC fault", "ge_srtp.plc_status_word.new_plc_fault",
+            FT_BOOLEAN, 16,
+            TFS(&tfs_new_plc_fault), 0x0004,
+            NULL, HFILL }
+        },
+        { &hf_ge_srtp_mbox_plc_status_word_new_io_fault,
+          { "New I/O fault", "ge_srtp.plc_status_word.new_io_fault",
+            FT_BOOLEAN, 16,
+            TFS(&tfs_new_io_fault), 0x0008,
+            NULL, HFILL }
+        },
+        { &hf_ge_srtp_mbox_plc_status_word_plc_fault,
+          { "PLC fault present", "ge_srtp.plc_status_word.plc_fault",
+            FT_BOOLEAN, 16,
+            TFS(&tfs_plc_fault), 0x0010,
+            NULL, HFILL }
+        },
+        { &hf_ge_srtp_mbox_plc_status_word_io_fault,
+          { "I/O fault present", "ge_srtp.plc_status_word.io_fault",
+            FT_BOOLEAN, 16,
+            TFS(&tfs_io_fault), 0x0020,
+            NULL, HFILL }
+        },
+        { &hf_ge_srtp_mbox_plc_status_word_programmer_attached,
+          { "Programmer attachment flag", "ge_srtp.plc_status_word.programmer_attached",
+            FT_BOOLEAN, 16,
+            TFS(&tfs_programmer_attached), 0x0040,
+            NULL, HFILL }
+        },
+        { &hf_ge_srtp_mbox_plc_status_word_outputs_switch,
+          { "Outputs enabled/disabled switch", "ge_srtp.plc_status_word.outputs_switch",
+            FT_BOOLEAN, 16,
+            TFS(&tfs_outputs_switch), 0x0080,
+            NULL, HFILL }
+        },
+        { &hf_ge_srtp_mbox_plc_status_word_run_switch,
+          { "Run/stop switch", "ge_srtp.plc_status_word.run_switch",
+            FT_BOOLEAN, 16,
+            TFS(&tfs_run_switch), 0x0100,
+            NULL, HFILL }
+        },
+        { &hf_ge_srtp_mbox_plc_status_word_oem_protection,
+          { "OEM protection", "ge_srtp.plc_status_word.oem_protection",
+            FT_BOOLEAN, 16,
+            TFS(&tfs_oem_protection), 0x0200,
+            NULL, HFILL }
+        },
+        { &hf_ge_srtp_mbox_plc_status_word_plc_state,
+          { "PLC state", "ge_srtp.plc_status_word.plc_state",
+            FT_UINT16, BASE_DEC,
+            VALS(ge_srtp_plc_state), 0xf000,
+            NULL, HFILL }
         },
         { &hf_ge_srtp_mbox_response_data_len,
           { "Response data length", "ge_srtp.response_data_len",
             FT_UINT16, BASE_DEC,
             NULL, 0,
-            "Response data length", HFILL }
+            NULL, HFILL }
         },
         { &hf_ge_srtp_mbox_major_error_status,
           { "Major error status", "ge_srtp.major_error_status",
             FT_UINT8, BASE_HEX,
             NULL, 0,
-            "Major error status", HFILL }
+            NULL, HFILL }
         },
         { &hf_ge_srtp_mbox_minor_error_status,
           { "Minor error status", "ge_srtp.minor_error_status",
             FT_UINT8, BASE_HEX,
             NULL, 0,
-            "Minor error status", HFILL }
+            NULL, HFILL }
         },
         { &hf_ge_srtp_text_buffer,
           { "Text Buffer", "ge_srtp.text_buffer",
             FT_NONE, BASE_NONE,
             NULL, 0,
-            "Text Buffer", HFILL }
+            NULL, HFILL }
         }
     };
 
