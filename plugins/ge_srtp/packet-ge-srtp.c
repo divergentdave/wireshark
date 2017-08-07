@@ -444,6 +444,8 @@ dissect_ge_srtp_message(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
     int timestamp_hr, timestamp_min, timestamp_sec;
     guint next_message_len;
 
+    tvbuff_t *tvb_svc_req_data _U_, *tvb_text_buffer _U_, *tvb_resp_data _U_;
+
     col_set_str(pinfo->cinfo, COL_PROTOCOL, "GE SRTP");
 
     conversation = find_or_create_conversation(pinfo);
@@ -568,10 +570,14 @@ dissect_ge_srtp_message(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
                     tvb, 49, 1, ENC_LITTLE_ENDIAN);
             proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_svc_req_data,
                     tvb, 51, 5, ENC_LITTLE_ENDIAN);
+            tvb_svc_req_data = tvb_new_subset_length_caplen(tvb, 51, 5, 5);
 
             proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_text_buffer,
                     tvb, SRTP_MAILBOX_MESSAGE_LENGTH, next_message_len,
                     ENC_LITTLE_ENDIAN);
+            tvb_text_buffer = tvb_new_subset_length_caplen(tvb,
+                    SRTP_MAILBOX_MESSAGE_LENGTH, next_message_len,
+                    next_message_len);
         } else if (mbox_type == 0x94) {  // Completion ACK with Text Buffer
             proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_response_data_len,
                     tvb, 42, 2, ENC_LITTLE_ENDIAN);
@@ -616,6 +622,9 @@ dissect_ge_srtp_message(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
             proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_text_buffer,
                     tvb, SRTP_MAILBOX_MESSAGE_LENGTH, next_message_len,
                     ENC_LITTLE_ENDIAN);
+            tvb_text_buffer = tvb_new_subset_length_caplen(tvb,
+                    SRTP_MAILBOX_MESSAGE_LENGTH, next_message_len,
+                    next_message_len);
         } else if (mbox_type == 0xC0) {  // Initial Request
             proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_packet_num,
                     tvb, 40, 1, ENC_LITTLE_ENDIAN);
@@ -626,6 +635,7 @@ dissect_ge_srtp_message(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
                     tvb, 42, 1, ENC_LITTLE_ENDIAN);
             proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_svc_req_data,
                     tvb, 43, 13, ENC_LITTLE_ENDIAN);
+            tvb_svc_req_data = tvb_new_subset_length_caplen(tvb, 43, 13, 13);
         } else if (mbox_type == 0xD1) {  // Error Nack
             proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_packet_num,
                     tvb, 40, 1, ENC_LITTLE_ENDIAN);
@@ -648,6 +658,7 @@ dissect_ge_srtp_message(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
                     tvb, 43, 1, ENC_LITTLE_ENDIAN);
             proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_response_data,
                     tvb, 44, 6, ENC_LITTLE_ENDIAN);
+            tvb_resp_data = tvb_new_subset_length_caplen(tvb, 44, 6, 6);
             piggyback_item = proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_piggyback_status,
                     tvb, 50, 6, ENC_NA);
             piggyback_tree = proto_item_add_subtree(piggyback_item, ett_piggyback);
