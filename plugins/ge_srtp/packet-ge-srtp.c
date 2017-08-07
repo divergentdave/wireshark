@@ -73,7 +73,8 @@ static int hf_ge_srtp_mbox_svc_req_data_len = -1;
 static int hf_ge_srtp_mbox_status_code = -1;
 static int hf_ge_srtp_mbox_status_data = -1;
 static int hf_ge_srtp_mbox_response_data = -1;
-static int hf_ge_srtp_mbox_control_program_num = -1; // TODO: subtree for piggyback
+static int hf_ge_srtp_mbox_piggyback_status = -1;
+static int hf_ge_srtp_mbox_control_program_num = -1;
 static int hf_ge_srtp_mbox_privilege_level = -1;
 static int hf_ge_srtp_mbox_last_sweep = -1;
 static int hf_ge_srtp_mbox_plc_status_word = -1;
@@ -102,6 +103,7 @@ static int hf_ge_srtp_text_buffer = -1;
 #define SRTP_MAILBOX_MESSAGE_LENGTH 56
 
 static gint ett_ge_srtp = -1;
+static gint ett_piggyback = -1;
 
 static const value_string ge_srtp_mbox_type[] = {
     { 0x80, "Initial Request with Text Buffer" },
@@ -425,8 +427,8 @@ static int
 dissect_ge_srtp_message(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
         void *data _U_)
 {
-    proto_item *ti;
-    proto_tree *ge_srtp_tree;
+    proto_item *ti, *piggyback_item;
+    proto_tree *ge_srtp_tree, *piggyback_tree;
     conversation_t *conversation;
     struct ge_srtp_request_key request_key, *new_request_key;
     struct ge_srtp_request_val *request_val = NULL;
@@ -570,35 +572,38 @@ dissect_ge_srtp_message(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
                     tvb, 48, 1, ENC_LITTLE_ENDIAN);
             proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_total_packets,
                     tvb, 49, 1, ENC_LITTLE_ENDIAN);
-            proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_control_program_num,
+            piggyback_item = proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_piggyback_status,
+                    tvb, 50, 6, ENC_NA);
+            piggyback_tree = proto_item_add_subtree(piggyback_item, ett_piggyback);
+            proto_tree_add_item(piggyback_tree, hf_ge_srtp_mbox_control_program_num,
                     tvb, 50, 1, ENC_LITTLE_ENDIAN);
-            proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_privilege_level,
+            proto_tree_add_item(piggyback_tree, hf_ge_srtp_mbox_privilege_level,
                     tvb, 51, 1, ENC_LITTLE_ENDIAN);
-            proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_last_sweep,
+            proto_tree_add_item(piggyback_tree, hf_ge_srtp_mbox_last_sweep,
                     tvb, 52, 2, ENC_LITTLE_ENDIAN);
-            proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_plc_status_word,
+            proto_tree_add_item(piggyback_tree, hf_ge_srtp_mbox_plc_status_word,
                     tvb, 54, 2, ENC_LITTLE_ENDIAN);
-            proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_plc_status_word_oversweep,
+            proto_tree_add_item(piggyback_tree, hf_ge_srtp_mbox_plc_status_word_oversweep,
                     tvb, 54, 2, ENC_LITTLE_ENDIAN);
-            proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_plc_status_word_constant_sweep_mode,
+            proto_tree_add_item(piggyback_tree, hf_ge_srtp_mbox_plc_status_word_constant_sweep_mode,
                     tvb, 54, 2, ENC_LITTLE_ENDIAN);
-            proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_plc_status_word_new_plc_fault,
+            proto_tree_add_item(piggyback_tree, hf_ge_srtp_mbox_plc_status_word_new_plc_fault,
                     tvb, 54, 2, ENC_LITTLE_ENDIAN);
-            proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_plc_status_word_new_io_fault,
+            proto_tree_add_item(piggyback_tree, hf_ge_srtp_mbox_plc_status_word_new_io_fault,
                     tvb, 54, 2, ENC_LITTLE_ENDIAN);
-            proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_plc_status_word_plc_fault,
+            proto_tree_add_item(piggyback_tree, hf_ge_srtp_mbox_plc_status_word_plc_fault,
                     tvb, 54, 2, ENC_LITTLE_ENDIAN);
-            proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_plc_status_word_io_fault,
+            proto_tree_add_item(piggyback_tree, hf_ge_srtp_mbox_plc_status_word_io_fault,
                     tvb, 54, 2, ENC_LITTLE_ENDIAN);
-            proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_plc_status_word_programmer_attached,
+            proto_tree_add_item(piggyback_tree, hf_ge_srtp_mbox_plc_status_word_programmer_attached,
                     tvb, 54, 2, ENC_LITTLE_ENDIAN);
-            proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_plc_status_word_outputs_switch,
+            proto_tree_add_item(piggyback_tree, hf_ge_srtp_mbox_plc_status_word_outputs_switch,
                     tvb, 54, 2, ENC_LITTLE_ENDIAN);
-            proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_plc_status_word_run_switch,
+            proto_tree_add_item(piggyback_tree, hf_ge_srtp_mbox_plc_status_word_run_switch,
                     tvb, 54, 2, ENC_LITTLE_ENDIAN);
-            proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_plc_status_word_oem_protection,
+            proto_tree_add_item(piggyback_tree, hf_ge_srtp_mbox_plc_status_word_oem_protection,
                     tvb, 54, 2, ENC_LITTLE_ENDIAN);
-            proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_plc_status_word_plc_state,
+            proto_tree_add_item(piggyback_tree, hf_ge_srtp_mbox_plc_status_word_plc_state,
                     tvb, 54, 2, ENC_LITTLE_ENDIAN);
 
             proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_text_buffer,
@@ -636,13 +641,38 @@ dissect_ge_srtp_message(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
                     tvb, 43, 1, ENC_LITTLE_ENDIAN);
             proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_response_data,
                     tvb, 44, 6, ENC_LITTLE_ENDIAN);
-            proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_control_program_num,
+            piggyback_item = proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_piggyback_status,
+                    tvb, 50, 6, ENC_NA);
+            piggyback_tree = proto_item_add_subtree(piggyback_item, ett_piggyback);
+            proto_tree_add_item(piggyback_tree, hf_ge_srtp_mbox_control_program_num,
                     tvb, 50, 1, ENC_LITTLE_ENDIAN);
-            proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_privilege_level,
+            proto_tree_add_item(piggyback_tree, hf_ge_srtp_mbox_privilege_level,
                     tvb, 51, 1, ENC_LITTLE_ENDIAN);
-            proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_last_sweep,
+            proto_tree_add_item(piggyback_tree, hf_ge_srtp_mbox_last_sweep,
                     tvb, 52, 2, ENC_LITTLE_ENDIAN);
-            proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_plc_status_word,
+            proto_tree_add_item(piggyback_tree, hf_ge_srtp_mbox_plc_status_word,
+                    tvb, 54, 2, ENC_LITTLE_ENDIAN);
+            proto_tree_add_item(piggyback_tree, hf_ge_srtp_mbox_plc_status_word_oversweep,
+                    tvb, 54, 2, ENC_LITTLE_ENDIAN);
+            proto_tree_add_item(piggyback_tree, hf_ge_srtp_mbox_plc_status_word_constant_sweep_mode,
+                    tvb, 54, 2, ENC_LITTLE_ENDIAN);
+            proto_tree_add_item(piggyback_tree, hf_ge_srtp_mbox_plc_status_word_new_plc_fault,
+                    tvb, 54, 2, ENC_LITTLE_ENDIAN);
+            proto_tree_add_item(piggyback_tree, hf_ge_srtp_mbox_plc_status_word_new_io_fault,
+                    tvb, 54, 2, ENC_LITTLE_ENDIAN);
+            proto_tree_add_item(piggyback_tree, hf_ge_srtp_mbox_plc_status_word_plc_fault,
+                    tvb, 54, 2, ENC_LITTLE_ENDIAN);
+            proto_tree_add_item(piggyback_tree, hf_ge_srtp_mbox_plc_status_word_io_fault,
+                    tvb, 54, 2, ENC_LITTLE_ENDIAN);
+            proto_tree_add_item(piggyback_tree, hf_ge_srtp_mbox_plc_status_word_programmer_attached,
+                    tvb, 54, 2, ENC_LITTLE_ENDIAN);
+            proto_tree_add_item(piggyback_tree, hf_ge_srtp_mbox_plc_status_word_outputs_switch,
+                    tvb, 54, 2, ENC_LITTLE_ENDIAN);
+            proto_tree_add_item(piggyback_tree, hf_ge_srtp_mbox_plc_status_word_run_switch,
+                    tvb, 54, 2, ENC_LITTLE_ENDIAN);
+            proto_tree_add_item(piggyback_tree, hf_ge_srtp_mbox_plc_status_word_oem_protection,
+                    tvb, 54, 2, ENC_LITTLE_ENDIAN);
+            proto_tree_add_item(piggyback_tree, hf_ge_srtp_mbox_plc_status_word_plc_state,
                     tvb, 54, 2, ENC_LITTLE_ENDIAN);
         }
     }
@@ -780,6 +810,12 @@ proto_register_ge_srtp(void)
             NULL, 0,
             NULL, HFILL }
         },
+        { &hf_ge_srtp_mbox_piggyback_status,
+          { "Piggyback status information", "ge_srtp.piggyback_status",
+            FT_NONE, BASE_NONE,
+            NULL, 0,
+            NULL, HFILL }
+        },
         { &hf_ge_srtp_mbox_control_program_num,
           { "Control program number", "ge_srtp.control_program_num",
             FT_UINT8, BASE_DEC,
@@ -897,7 +933,8 @@ proto_register_ge_srtp(void)
     };
 
     static gint *ett[] = {
-        &ett_ge_srtp
+        &ett_ge_srtp,
+        &ett_piggyback,
     };
 
     proto_ge_srtp = proto_register_protocol("GE SRTP", "GE SRTP", "ge_srtp");
