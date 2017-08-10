@@ -98,12 +98,17 @@ static int hf_ge_srtp_mbox_minor_error_status = -1;
 
 static int hf_ge_srtp_text_buffer = -1;
 
+static int hf_ge_srtp_return_plc_time_date_time = -1;
+static int hf_ge_srtp_return_plc_time_date_date = -1;
+static int hf_ge_srtp_return_plc_time_date_dow = -1;
+
 #define GE_SRTP_TCP_PORT 18245
 #define NEXT_MESSAGE_LENGTH_OFFSET 4
 #define SRTP_MAILBOX_MESSAGE_LENGTH 56
 
 static gint ett_ge_srtp = -1;
 static gint ett_piggyback = -1;
+static gint ett_text_buffer = -1;
 
 static const value_string ge_srtp_mbox_type[] = {
     { 0x80, "Initial Request with Text Buffer" },
@@ -363,6 +368,33 @@ static const true_false_string tfs_oversweep = {
     "There is no OEM protection"
 };
 
+static const char* month_list[] = {
+    NULL,
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December"
+};
+
+static const char* days_of_week_list[] = {
+    NULL,
+    "Sunday",
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday"
+};
+
 struct ge_srtp_request_key {
     guint32 conversation;
     guint16 srtp_seq_num;
@@ -428,14 +460,63 @@ ge_srtp_cleanup_protocol(void)
     g_hash_table_destroy(ge_srtp_request_hash);
 }
 
+static void
+dissect_response_text_buffer(guint8 svc_req_code, tvbuff_t *tvb, proto_tree *tree)
+{
+    int timestamp_hr, timestamp_min, timestamp_sec;
+    int date_date, date_month, date_year;
+    int day_of_week;
+    switch (svc_req_code) {
+        case 0x25:  // Return PLC Time/Date
+            timestamp_hr = bcd_decode_byte(tvb_get_guint8(tvb, 0));
+            timestamp_min = bcd_decode_byte(tvb_get_guint8(tvb, 1));
+            timestamp_sec = bcd_decode_byte(tvb_get_guint8(tvb, 2));
+            if (timestamp_hr != -1 && timestamp_min != -1 && timestamp_sec != -1) {
+                proto_tree_add_bytes_format_value(tree,
+                        hf_ge_srtp_return_plc_time_date_time,
+                        tvb, 0, 3, NULL, "%02d:%02d:%02d",
+                        timestamp_hr, timestamp_min, timestamp_sec);
+            } else {
+                proto_tree_add_item(tree, hf_ge_srtp_return_plc_time_date_time,
+                        tvb, 0, 3, ENC_LITTLE_ENDIAN);
+            }
+            date_date = bcd_decode_byte(tvb_get_guint8(tvb, 3));
+            date_month = bcd_decode_byte(tvb_get_guint8(tvb, 4));
+            date_year = bcd_decode_byte(tvb_get_guint8(tvb, 5));
+            if (date_date != -1 && date_month >= 1 && date_month <= 12 && date_year != -1) {
+                if (date_year < 70) {
+                    date_year += 2000;
+                } else {
+                    date_year += 1900;
+                }
+                proto_tree_add_bytes_format_value(tree,
+                        hf_ge_srtp_return_plc_time_date_date,
+                        tvb, 3, 3, NULL, "%s %d, %d", month_list[date_month],
+                        date_date, date_year);
+            } else {
+                proto_tree_add_item(tree, hf_ge_srtp_return_plc_time_date_date,
+                        tvb, 3, 3, ENC_LITTLE_ENDIAN);
+            }
+            day_of_week = tvb_get_guint8(tvb, 6);
+            if (day_of_week >= 1 && day_of_week <= 7) {
+                proto_tree_add_uint_format_value(tree, hf_ge_srtp_return_plc_time_date_dow,
+                        tvb, 6, 1, day_of_week, "%s", days_of_week_list[day_of_week]);
+            } else {
+                proto_tree_add_item(tree, hf_ge_srtp_return_plc_time_date_dow,
+                        tvb, 6, 1, ENC_LITTLE_ENDIAN);
+            }
+            break;
+    }
+}
+
 #define FRAME_HEADER_LEN 18
 
 static int
 dissect_ge_srtp_message(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
         void *data _U_)
 {
-    proto_item *ti, *piggyback_item;
-    proto_tree *ge_srtp_tree, *piggyback_tree;
+    proto_item *ti, *piggyback_item, *text_buffer_item;
+    proto_tree *ge_srtp_tree, *piggyback_tree, *text_buffer_tree;
     conversation_t *conversation;
     struct ge_srtp_request_key request_key, *new_request_key;
     struct ge_srtp_request_val *request_val = NULL;
@@ -569,7 +650,7 @@ dissect_ge_srtp_message(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
                     tvb, 42, 1, ENC_LITTLE_ENDIAN);
             proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_svc_req_data,
                     tvb, 43, 13, ENC_LITTLE_ENDIAN);
-            tvb_svc_req_data = tvb_new_subset_length_caplen(tvb, 43, 13, 13);
+            tvb_svc_req_data = tvb_new_subset_length(tvb, 43, 13);
         } else if (mbox_type == 0x80) {  // Initial Request with Text Buffer
             proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_svc_req_code,
                     tvb, 42, 1, ENC_LITTLE_ENDIAN);
@@ -581,14 +662,13 @@ dissect_ge_srtp_message(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
                     tvb, 49, 1, ENC_LITTLE_ENDIAN);
             proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_svc_req_data,
                     tvb, 51, 5, ENC_LITTLE_ENDIAN);
-            tvb_svc_req_data = tvb_new_subset_length_caplen(tvb, 51, 5, 5);
+            tvb_svc_req_data = tvb_new_subset_length(tvb, 51, 5);
 
             proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_text_buffer,
                     tvb, SRTP_MAILBOX_MESSAGE_LENGTH, next_message_len,
                     ENC_LITTLE_ENDIAN);
-            tvb_text_buffer = tvb_new_subset_length_caplen(tvb,
-                    SRTP_MAILBOX_MESSAGE_LENGTH, next_message_len,
-                    next_message_len);
+            tvb_text_buffer = tvb_new_subset_length(tvb,
+                    SRTP_MAILBOX_MESSAGE_LENGTH, next_message_len);
         } else if (mbox_type == 0xD4) {  // Completion ACK
             proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_packet_num,
                     tvb, 40, 1, ENC_LITTLE_ENDIAN);
@@ -601,7 +681,7 @@ dissect_ge_srtp_message(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
                     tvb, 43, 1, ENC_LITTLE_ENDIAN);
             proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_response_data,
                     tvb, 44, 6, ENC_LITTLE_ENDIAN);
-            tvb_resp_data = tvb_new_subset_length_caplen(tvb, 44, 6, 6);
+            tvb_resp_data = tvb_new_subset_length(tvb, 44, 6);
             piggyback_item = proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_piggyback_status,
                     tvb, 50, 6, ENC_NA);
             piggyback_tree = proto_item_add_subtree(piggyback_item, ett_piggyback);
@@ -676,12 +756,16 @@ dissect_ge_srtp_message(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
             proto_tree_add_item(piggyback_tree, hf_ge_srtp_mbox_plc_status_word_plc_state,
                     tvb, 54, 2, ENC_LITTLE_ENDIAN);
 
-            proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_text_buffer,
+            text_buffer_item = proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_text_buffer,
                     tvb, SRTP_MAILBOX_MESSAGE_LENGTH, next_message_len,
                     ENC_LITTLE_ENDIAN);
-            tvb_text_buffer = tvb_new_subset_length_caplen(tvb,
-                    SRTP_MAILBOX_MESSAGE_LENGTH, next_message_len,
-                    next_message_len);
+            text_buffer_tree = proto_item_add_subtree(text_buffer_item, ett_text_buffer);
+            tvb_text_buffer = tvb_new_subset_length(tvb,
+                    SRTP_MAILBOX_MESSAGE_LENGTH, next_message_len);
+            if (request_val) {
+                dissect_response_text_buffer(request_val->svc_req_type, tvb_text_buffer,
+                        text_buffer_tree);
+            }
         } else if (mbox_type == 0xD1) {  // Error Nack
             proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_packet_num,
                     tvb, 40, 1, ENC_LITTLE_ENDIAN);
@@ -947,12 +1031,31 @@ proto_register_ge_srtp(void)
             FT_NONE, BASE_NONE,
             NULL, 0,
             NULL, HFILL }
+        },
+        { &hf_ge_srtp_return_plc_time_date_time,
+          { "Time", "ge_srtp.return_plc_time_date.time",
+            FT_BYTES, BASE_NONE,
+            NULL, 0,
+            NULL, HFILL }
+        },
+        { &hf_ge_srtp_return_plc_time_date_date,
+          { "Date", "ge_srtp.return_plc_time_date.date",
+            FT_BYTES, BASE_NONE,
+            NULL, 0,
+            NULL, HFILL }
+        },
+        { &hf_ge_srtp_return_plc_time_date_dow,
+          { "Day of week", "ge_srtp.return_plc_time_date.dow",
+            FT_UINT8, BASE_DEC,
+            NULL, 0,
+            NULL, HFILL }
         }
     };
 
     static gint *ett[] = {
         &ett_ge_srtp,
         &ett_piggyback,
+        &ett_text_buffer,
     };
 
     proto_ge_srtp = proto_register_protocol("GE SRTP", "GE SRTP", "ge_srtp");
