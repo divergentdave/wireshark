@@ -52,7 +52,7 @@ static int hf_ge_srtp_type = -1;
 static int hf_ge_srtp_seq_num = -1;
 static int hf_ge_srtp_next_msg_len = -1;
 
-static int hf_ge_srtp_mbox_todo = -1;
+static int hf_ge_srtp_mbox_unknown = -1;
 
 /* Mailbox messages */
 static int hf_ge_srtp_mbox_timestamp = -1;
@@ -616,7 +616,7 @@ dissect_ge_srtp_message(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
                 tvb, NEXT_MESSAGE_LENGTH_OFFSET , 2, ENC_LITTLE_ENDIAN);
         next_message_len = (guint)tvb_get_letohs(tvb, NEXT_MESSAGE_LENGTH_OFFSET) + SRTP_MAILBOX_MESSAGE_LENGTH;
 
-        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_todo,
+        proto_tree_add_item(ge_srtp_tree, hf_ge_srtp_mbox_unknown,
                 tvb, 6, 18, ENC_NA);
 
         timestamp_hr = bcd_decode_byte(tvb_get_guint8(tvb, 26));
@@ -828,8 +828,8 @@ proto_register_ge_srtp(void)
             NULL, 0,
             NULL, HFILL }
         },
-        { &hf_ge_srtp_mbox_todo,
-          { "TODO", "ge_srtp.todo",
+        { &hf_ge_srtp_mbox_unknown,
+          { "Unknown", "ge_srtp.unknown",
             FT_NONE, BASE_NONE,
             NULL, 0,
             NULL, HFILL }
